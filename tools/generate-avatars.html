@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NFA Avatar Generator — Dungeon Terminal</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a12; color: #c0c0c0; font-family: 'Courier New', monospace; padding: 20px; }
+  h1 { color: #e0c060; text-align: center; letter-spacing: 4px; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #606060; font-size: 12px; margin-bottom: 16px; }
+
+  /* ── Background Controls ── */
+  .bg-panel {
+    max-width: 1300px; margin: 0 auto 16px; border: 1px solid #222;
+    padding: 12px 16px; background: #0d0d18;
+  }
+  .bg-panel .label { color: #e0c060; font-size: 12px; letter-spacing: 1px; margin-bottom: 8px; }
+  .bg-swatches { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .bg-swatch {
+    width: 36px; height: 36px; border: 2px solid #333; cursor: pointer;
+    position: relative; transition: border-color 0.2s;
+  }
+  .bg-swatch:hover { border-color: #888; }
+  .bg-swatch.active { border-color: #e0c060; box-shadow: 0 0 6px rgba(224,192,96,0.3); }
+  .bg-swatch canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+  .bg-swatch .swatch-name {
+    position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%);
+    font-size: 8px; color: #606060; white-space: nowrap;
+  }
+
+  /* ── Grid ── */
+  .grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px;
+    max-width: 1300px; margin: 0 auto 20px;
+  }
+  .card { text-align: center; border: 1px solid #222; padding: 10px; background: #0d0d18; }
+  .card canvas {
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    width: 160px; height: 160px; border: 2px solid #1a1a2e;
+    display: block; margin: 0 auto 6px;
+  }
+  .card .name { color: #e0c060; font-size: 12px; letter-spacing: 1px; }
+  .card .meta { color: #607060; font-size: 10px; margin-top: 2px; }
+  .card button {
+    margin-top: 6px; background: transparent; border: 1px solid #e0c060;
+    color: #e0c060; padding: 3px 10px; font-family: inherit; font-size: 10px;
+    cursor: pointer; letter-spacing: 1px;
+  }
+  .card button:hover { background: #e0c060; color: #0a0a12; }
+
+  /* ── Actions ── */
+  .actions { text-align: center; margin-bottom: 16px; }
+  .actions button {
+    background: transparent; border: 2px solid #e0c060; color: #e0c060;
+    padding: 8px 22px; font-family: inherit; font-size: 13px; cursor: pointer;
+    letter-spacing: 2px; margin: 0 6px;
+  }
+  .actions button:hover { background: #e0c060; color: #0a0a12; }
+  .info { text-align: center; color: #505050; font-size: 10px; margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<h1>[ NFA AVATAR GENERATOR ]</h1>
+<p class="subtitle">16&times;16 Pixel Art &mdash; Compact Characters &mdash; Swappable Backgrounds &mdash; 512&times;512 Export</p>
+
+<!-- Background selector -->
+<div class="bg-panel">
+  <div class="label">BACKGROUND</div>
+  <div class="bg-swatches" id="bgSwatches"></div>
+</div>
+
+<div class="actions">
+  <button onclick="downloadAll()">DOWNLOAD ALL</button>
+  <button onclick="batchExport()">BATCH (ALL BG &times; ALL CHARS)</button>
+</div>
+
+<div class="grid" id="grid"></div>
+<p class="info">Characters are drawn compact and centered for easy background swaps. Use BATCH to export every combination.</p>
+
+<script>
+// ── Helpers ──
+function r(c, x, y, w, h, color) { c.fillStyle = color; c.fillRect(x, y, w, h); }
+function px(c, x, y, color) { r(c, x, y, 1, 1, color); }
+
+// ── Background Presets ──
+// Each bg draws on a 16x16 canvas. Characters are drawn on top.
+const backgrounds = [
+  {
+    name: 'Abyss',
+    draw(c) { r(c, 0,0,16,16, '#0d0d1a'); }
+  },
+  {
+    name: 'Deep Sea',
+    draw(c) {
+      for (let y = 0; y < 16; y++) {
+        const t = y / 15;
+        const rb = Math.round(8 + t * 10), g = Math.round(10 + t * 18), b = Math.round(30 + t * 30);
+        r(c, 0, y, 16, 1, `rgb(${rb},${g},${b})`);
+      }
+    }
+  },
+  {
+    name: 'Blood Moon',
+    draw(c) {
+      for (let y = 0; y < 16; y++) {
+        const t = y / 15;
+        const rb = Math.round(25 + t * 15), g = Math.round(5 + t * 5), b = Math.round(10 + t * 10);
+        r(c, 0, y, 16, 1, `rgb(${rb},${g},${b})`);
+      }
+    }
+  },
+  {
+    name: 'Void',
+    draw(c) { r(c, 0,0,16,16, '#060608'); }
+  },
+  {
+    name: 'Forest',
+    draw(c) {
+      for (let y = 0; y < 16; y++) {
+        const t = y / 15;
+        const rb = Math.round(6 + t * 10), g = Math.round(14 + t * 16), b = Math.round(10 + t * 12);
+        r(c, 0, y, 16, 1, `rgb(${rb},${g},${b})`);
+      }
+    }
+  },
+  {
+    name: 'Arcane',
+    draw(c) {
+      for (let y = 0; y < 16; y++) {
+        const t = y / 15;
+        const rb = Math.round(14 + t * 12), g = Math.round(6 + t * 8), b = Math.round(28 + t * 20);
+        r(c, 0, y, 16, 1, `rgb(${rb},${g},${b})`);
+      }
+    }
+  },
+  {
+    name: 'Ember',
+    draw(c) {
+      r(c, 0,0,16,16, '#1a0c08');
+      // subtle ember particles
+      const embers = [[2,13],[5,11],[9,14],[13,12],[7,15],[11,10],[3,9],[14,14]];
+      embers.forEach(([x,y]) => { px(c, x, y, '#301808'); });
+      const bright = [[4,14],[10,13],[1,11]];
+      bright.forEach(([x,y]) => { px(c, x, y, '#482010'); });
+    }
+  },
+  {
+    name: 'Starfield',
+    draw(c) {
+      r(c, 0,0,16,16, '#08080e');
+      const stars = [[1,1],[3,5],[6,2],[9,0],[12,3],[14,6],[2,8],[7,10],[11,12],[15,1],[0,14],[5,13],[13,9],[8,6],[4,15]];
+      stars.forEach(([x,y]) => { px(c, x, y, '#282838'); });
+      const bright = [[3,2],[10,4],[6,12],[14,10],[1,7]];
+      bright.forEach(([x,y]) => { px(c, x, y, '#404058'); });
+    }
+  },
+  {
+    name: 'Shadow',
+    draw(c) {
+      r(c, 0,0,16,16, '#0e0c14');
+      // vignette: darken edges
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        const dx = (x - 7.5) / 8, dy = (y - 7.5) / 8;
+        const d = Math.sqrt(dx*dx + dy*dy);
+        if (d > 0.6) {
+          const a = Math.min((d - 0.6) * 0.6, 0.4);
+          c.fillStyle = `rgba(0,0,0,${a})`;
+          c.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+  },
+  {
+    name: 'Golden',
+    draw(c) {
+      for (let y = 0; y < 16; y++) {
+        const t = y / 15;
+        const rb = Math.round(20 + t * 12), g = Math.round(16 + t * 10), b = Math.round(6 + t * 4);
+        r(c, 0, y, 16, 1, `rgb(${rb},${g},${b})`);
+      }
+    }
+  },
+  {
+    name: 'Frost',
+    draw(c) {
+      for (let y = 0; y < 16; y++) {
+        const t = y / 15;
+        const rb = Math.round(14 + t * 16), g = Math.round(18 + t * 22), b = Math.round(30 + t * 28);
+        r(c, 0, y, 16, 1, `rgb(${rb},${g},${b})`);
+      }
+      // ice crystals
+      const ice = [[2,3],[6,1],[11,4],[14,2],[4,8],[9,6],[13,10],[1,12],[8,14],[15,7]];
+      ice.forEach(([x,y]) => { px(c, x, y, '#384868'); });
+      const bright = [[3,5],[10,2],[7,11]];
+      bright.forEach(([x,y]) => { px(c, x, y, '#4860a0'); });
+    }
+  },
+  {
+    name: 'Toxic',
+    draw(c) {
+      for (let y = 0; y < 16; y++) {
+        const t = y / 15;
+        const rb = Math.round(8 + t * 8), g = Math.round(14 + t * 18), b = Math.round(6 + t * 6);
+        r(c, 0, y, 16, 1, `rgb(${rb},${g},${b})`);
+      }
+      // toxic bubbles
+      const bub = [[3,12],[7,14],[10,11],[14,13],[1,10],[5,15],[12,15],[9,9]];
+      bub.forEach(([x,y]) => { px(c, x, y, '#306020'); });
+      const glow = [[4,13],[8,12],[11,14]];
+      glow.forEach(([x,y]) => { px(c, x, y, '#408030'); });
+    }
+  },
+  {
+    name: 'Holy',
+    draw(c) {
+      // warm radial glow from center
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        const dx = (x - 7.5) / 8, dy = (y - 7.5) / 8;
+        const d = Math.sqrt(dx*dx + dy*dy);
+        const v = Math.max(0, 1 - d);
+        const rb = Math.round(12 + v * 24), g = Math.round(10 + v * 20), b = Math.round(6 + v * 10);
+        c.fillStyle = `rgb(${rb},${g},${b})`;
+        c.fillRect(x, y, 1, 1);
+      }
+    }
+  },
+  {
+    name: 'Sunset',
+    draw(c) {
+      for (let y = 0; y < 16; y++) {
+        const t = y / 15;
+        const rb = Math.round(30 + (1-t) * 18), g = Math.round(10 + t * 8), b = Math.round(14 + t * 16);
+        r(c, 0, y, 16, 1, `rgb(${rb},${g},${b})`);
+      }
+    }
+  },
+  {
+    name: 'Crystal',
+    draw(c) {
+      r(c, 0,0,16,16, '#0c0c18');
+      // crystal facets
+      const facets = [[2,5],[4,2],[7,7],[10,3],[13,6],[3,11],[6,13],[9,10],[12,12],[15,9],[1,8],[8,1]];
+      facets.forEach(([x,y]) => { px(c, x, y, '#282850'); });
+      const shiny = [[5,4],[11,5],[3,9],[9,12],[14,8]];
+      shiny.forEach(([x,y]) => { px(c, x, y, '#4040a0'); });
+      const bright = [[7,3],[12,10]];
+      bright.forEach(([x,y]) => { px(c, x, y, '#6060c0'); });
+    }
+  },
+  {
+    name: 'Infernal',
+    draw(c) {
+      for (let y = 0; y < 16; y++) {
+        const t = y / 15;
+        const rb = Math.round(22 + t * 20), g = Math.round(4 + t * 6), b = Math.round(2 + t * 3);
+        r(c, 0, y, 16, 1, `rgb(${rb},${g},${b})`);
+      }
+      // lava cracks
+      const cracks = [[3,14],[5,12],[8,15],[11,13],[14,11],[2,10],[6,9],[10,8]];
+      cracks.forEach(([x,y]) => { px(c, x, y, '#c03010'); });
+      const hot = [[4,13],[9,14],[13,12]];
+      hot.forEach(([x,y]) => { px(c, x, y, '#e05020'); });
+    }
+  },
+];
+
+// ── Avatar Definitions (compact, centered) ──
+// Characters occupy ~8x8 area centered in the 16x16 canvas.
+// Head region: rows 4-8, Body: rows 9-11. Width: cols 5-10 (with extras for ears/horns).
+const avatars = [
+
+// ─── 1. Human Warrior ───
+{
+  name: 'Human Warrior', race: 'Human', class_: 'Warrior',
+  drawChar(c) {
+    // Hair
+    r(c, 6,3,4,1, '#4a2a15');
+    r(c, 5,4,6,1, '#5a3820');
+    px(c, 5,5, '#4a2a15'); px(c, 10,5, '#4a2a15');
+    // Face
+    r(c, 6,5,4,3, '#e8b878');
+    r(c, 6,7,4,1, '#d0a060');
+    // Eyes
+    px(c, 6,5, '#e8e8e8'); px(c, 7,5, '#2850a8');
+    px(c, 8,5, '#e8e8e8'); px(c, 9,5, '#2850a8');
+    // Mouth
+    px(c, 7,7, '#c08060'); px(c, 8,7, '#c08060');
+    // Neck
+    px(c, 7,8, '#d0a060'); px(c, 8,8, '#d0a060');
+    // Cape
+    px(c, 4,9, '#8c1820'); px(c, 4,10, '#8c1820'); px(c, 4,11, '#8c1820');
+    px(c, 11,9, '#8c1820'); px(c, 11,10, '#8c1820'); px(c, 11,11, '#8c1820');
+    // Armor
+    r(c, 5,9,6,1, '#5878c0');
+    r(c, 5,10,6,2, '#4060a8');
+    r(c, 6,10,4,2, '#5070b8');
+    px(c, 7,10, '#6888d0'); px(c, 8,10, '#6888d0');
+  }
+},
+
+// ─── 2. Elf Mage ───
+{
+  name: 'Elf Mage', race: 'Elf', class_: 'Mage',
+  drawChar(c) {
+    // Hair
+    r(c, 6,3,4,1, '#c0c8d8');
+    r(c, 5,4,6,1, '#b0b8c8');
+    px(c, 5,5, '#b0b8c8'); px(c, 10,5, '#b0b8c8');
+    // Pointed ears
+    px(c, 4,5, '#e0d0b8'); px(c, 3,4, '#e0d0b8');
+    px(c, 11,5, '#e0d0b8'); px(c, 12,4, '#e0d0b8');
+    // Face
+    r(c, 6,5,4,3, '#e8d8c0');
+    // Eyes
+    px(c, 6,5, '#e8e8f0'); px(c, 7,5, '#6030b0');
+    px(c, 8,5, '#e8e8f0'); px(c, 9,5, '#6030b0');
+    // Mouth
+    px(c, 7,7, '#c0a088'); px(c, 8,7, '#c0a088');
+    // Neck
+    px(c, 7,8, '#d0c0a0'); px(c, 8,8, '#d0c0a0');
+    // Robes
+    r(c, 5,9,6,1, '#40d0e0');
+    r(c, 4,10,8,2, '#5030b0');
+    r(c, 5,10,6,2, '#6040c0');
+    px(c, 7,10, '#7858d0'); px(c, 8,10, '#7858d0');
+  }
+},
+
+// ─── 3. Dwarf Cleric ───
+{
+  name: 'Dwarf Cleric', race: 'Dwarf', class_: 'Cleric',
+  drawChar(c) {
+    // Hair
+    r(c, 5,3,6,1, '#a06030');
+    r(c, 5,4,6,1, '#885020');
+    px(c, 5,5, '#a06030'); px(c, 10,5, '#a06030');
+    // Face (wider)
+    r(c, 5,5,6,2, '#d8a870');
+    // Eyes
+    px(c, 6,5, '#e8e8e0'); px(c, 7,5, '#406020');
+    px(c, 8,5, '#e8e8e0'); px(c, 9,5, '#406020');
+    // Bushy brows
+    px(c, 6,4, '#885020'); px(c, 7,4, '#885020');
+    px(c, 8,4, '#885020'); px(c, 9,4, '#885020');
+    // Beard
+    r(c, 5,7,6,2, '#c88040');
+    r(c, 6,9,4,1, '#b87030');
+    // Golden armor
+    r(c, 4,9,8,1, '#d8b840');
+    r(c, 4,10,8,2, '#c0a030');
+    r(c, 5,10,6,2, '#d8b840');
+    // Holy cross
+    px(c, 7,11, '#f0e880'); px(c, 8,11, '#f0e880');
+  }
+},
+
+// ─── 4. Tiefling Rogue ───
+{
+  name: 'Tiefling Rogue', race: 'Tiefling', class_: 'Rogue',
+  drawChar(c) {
+    // Horns
+    px(c, 5,2, '#3a1818'); px(c, 4,3, '#3a1818');
+    px(c, 10,2, '#3a1818'); px(c, 11,3, '#3a1818');
+    // Hood
+    r(c, 5,3,6,2, '#282030');
+    px(c, 4,4, '#1e1828'); px(c, 11,4, '#1e1828');
+    px(c, 4,5, '#1e1828'); px(c, 11,5, '#1e1828');
+    // Face (red)
+    r(c, 6,5,4,3, '#c04848');
+    // Glowing eyes
+    px(c, 6,5, '#f0e060'); px(c, 7,5, '#302010');
+    px(c, 8,5, '#f0e060'); px(c, 9,5, '#302010');
+    // Mouth
+    px(c, 7,7, '#903030'); px(c, 8,7, '#903030');
+    // Neck
+    px(c, 7,8, '#a03838'); px(c, 8,8, '#a03838');
+    // Leather
+    r(c, 4,9,8,3, '#282030');
+    r(c, 5,9,6,3, '#322840');
+    px(c, 7,9, '#3a3048'); px(c, 8,9, '#3a3048');
+    // Dagger
+    px(c, 11,10, '#8090a0'); px(c, 11,11, '#606878');
+  }
+},
+
+// ─── 5. Beastkin Ranger ───
+{
+  name: 'Beastkin Ranger', race: 'Beastkin', class_: 'Ranger',
+  drawChar(c) {
+    // Wolf ears
+    px(c, 5,2, '#a08050'); px(c, 6,2, '#c0a070');
+    px(c, 10,2, '#a08050'); px(c, 9,2, '#c0a070');
+    // Fur head
+    r(c, 6,3,4,1, '#a08050');
+    r(c, 5,4,6,1, '#b09060');
+    px(c, 5,5, '#a08050'); px(c, 10,5, '#a08050');
+    // Face
+    r(c, 6,5,4,2, '#c8b080');
+    px(c, 6,7, '#a08050'); px(c, 7,7, '#b09060'); px(c, 8,7, '#b09060'); px(c, 9,7, '#a08050');
+    // Eyes
+    px(c, 6,5, '#e0d040'); px(c, 7,5, '#181010');
+    px(c, 8,5, '#e0d040'); px(c, 9,5, '#181010');
+    // Nose
+    px(c, 7,6, '#302018'); px(c, 8,6, '#302018');
+    // Neck
+    px(c, 7,8, '#a08050'); px(c, 8,8, '#a08050');
+    // Green cloak
+    r(c, 4,9,8,3, '#386830');
+    r(c, 5,9,6,3, '#408038');
+    px(c, 7,9, '#a08040'); px(c, 8,9, '#a08040');
+    // Bow
+    px(c, 12,9, '#6a4a20'); px(c, 12,10, '#6a4a20'); px(c, 12,11, '#6a4a20');
+  }
+},
+
+// ─── 6. Human Bard ───
+{
+  name: 'Human Bard', race: 'Human', class_: 'Bard',
+  drawChar(c) {
+    // Feathered hat
+    r(c, 6,3,4,1, '#6030a0');
+    r(c, 5,4,6,1, '#6030a0');
+    px(c, 10,3, '#e04040'); px(c, 11,3, '#c03030');
+    // Blonde hair
+    px(c, 5,5, '#d0a040'); px(c, 10,5, '#d0a040');
+    // Face
+    r(c, 6,5,4,3, '#e8b878');
+    // Wink left eye + right eye
+    px(c, 6,5, '#d0a060'); px(c, 7,5, '#d0a060');
+    px(c, 8,5, '#e8e8e8'); px(c, 9,5, '#2870a0');
+    // Smile
+    px(c, 7,7, '#c08060'); px(c, 8,7, '#c08060');
+    // Neck
+    px(c, 7,8, '#d0a060'); px(c, 8,8, '#d0a060');
+    // Outfit
+    r(c, 5,9,6,1, '#d0a030');
+    r(c, 4,10,8,2, '#6838b0');
+    r(c, 5,10,6,2, '#7848c0');
+    // Lute
+    px(c, 3,10, '#8a6028'); px(c, 3,11, '#a07030');
+  }
+},
+
+// ─── 7. Elf Ranger ───
+{
+  name: 'Elf Ranger', race: 'Elf', class_: 'Ranger',
+  drawChar(c) {
+    // Hood
+    r(c, 6,3,4,1, '#386838');
+    r(c, 5,4,6,1, '#2a5830');
+    px(c, 4,5, '#224828'); px(c, 11,5, '#224828');
+    // Pointed ears
+    px(c, 4,4, '#e0d0b8'); px(c, 3,5, '#e0d0b8');
+    px(c, 11,4, '#e0d0b8'); px(c, 12,5, '#e0d0b8');
+    // Face
+    r(c, 6,5,4,3, '#e0d0b8');
+    // Eyes
+    px(c, 6,5, '#e0e8e0'); px(c, 7,5, '#208040');
+    px(c, 8,5, '#e0e8e0'); px(c, 9,5, '#208040');
+    // Mouth
+    px(c, 7,7, '#b0a080'); px(c, 8,7, '#b0a080');
+    // Neck
+    px(c, 7,8, '#c8b898'); px(c, 8,8, '#c8b898');
+    // Green cloak
+    r(c, 4,9,8,3, '#286028');
+    r(c, 5,9,6,3, '#307830');
+    px(c, 7,9, '#60b040'); px(c, 8,9, '#60b040');
+    // Bow
+    px(c, 12,8, '#7a5828'); px(c, 12,9, '#7a5828'); px(c, 12,10, '#7a5828');
+  }
+},
+
+// ─── 8. Dwarf Warrior ───
+{
+  name: 'Dwarf Warrior', race: 'Dwarf', class_: 'Warrior',
+  drawChar(c) {
+    // Helmet
+    r(c, 5,3,6,2, '#606878');
+    r(c, 6,3,4,1, '#788090');
+    px(c, 7,5, '#606878'); px(c, 8,5, '#606878');
+    // Face
+    r(c, 5,5,6,2, '#d8a870');
+    // Eyes
+    px(c, 6,5, '#e0e0d8'); px(c, 7,5, '#3a3020');
+    px(c, 8,5, '#e0e0d8'); px(c, 9,5, '#3a3020');
+    // Red beard
+    r(c, 5,7,6,2, '#c04030');
+    r(c, 6,9,4,1, '#a83020');
+    // Heavy plate
+    r(c, 4,9,8,1, '#788090');
+    r(c, 4,10,8,2, '#606878');
+    r(c, 5,10,6,2, '#6a7080');
+    px(c, 7,10, '#788090'); px(c, 8,10, '#788090');
+    // Studs
+    px(c, 4,9, '#a0a0a8'); px(c, 11,9, '#a0a0a8');
+  }
+},
+
+// ─── 9. Tiefling Mage ───
+{
+  name: 'Tiefling Mage', race: 'Tiefling', class_: 'Mage',
+  drawChar(c) {
+    // Horns
+    px(c, 5,2, '#2a1018'); px(c, 4,3, '#381820');
+    px(c, 10,2, '#2a1018'); px(c, 11,3, '#381820');
+    // Hair
+    r(c, 6,3,4,1, '#3a1838');
+    r(c, 5,4,6,1, '#4a2048');
+    px(c, 5,5, '#3a1838'); px(c, 10,5, '#3a1838');
+    // Face (lavender)
+    r(c, 6,5,4,3, '#b068a8');
+    // Glowing eyes
+    px(c, 6,5, '#e06020'); px(c, 7,5, '#f09030');
+    px(c, 8,5, '#e06020'); px(c, 9,5, '#f09030');
+    // Mouth
+    px(c, 7,7, '#804870'); px(c, 8,7, '#804870');
+    // Neck
+    px(c, 7,8, '#905888'); px(c, 8,8, '#905888');
+    // Robes
+    r(c, 5,9,6,1, '#e04020');
+    r(c, 4,10,8,2, '#281838');
+    r(c, 5,10,6,2, '#382048');
+    // Fire glow
+    px(c, 3,10, '#e04020'); px(c, 3,11, '#f08030');
+    px(c, 12,10, '#e04020'); px(c, 12,11, '#f08030');
+  }
+},
+
+// ─── 10. Beastkin Warrior ───
+{
+  name: 'Beastkin Warrior', race: 'Beastkin', class_: 'Warrior',
+  drawChar(c) {
+    // Wolf ears
+    px(c, 5,2, '#707070'); px(c, 6,2, '#909088');
+    px(c, 10,2, '#707070'); px(c, 9,2, '#909088');
+    // Fur head
+    r(c, 6,3,4,1, '#686868');
+    r(c, 5,4,6,1, '#787878');
+    px(c, 5,5, '#686868'); px(c, 10,5, '#686868');
+    // Face
+    r(c, 6,5,4,2, '#989888');
+    px(c, 6,7, '#686860'); px(c, 7,7, '#808078'); px(c, 8,7, '#808078'); px(c, 9,7, '#686860');
+    // Eyes
+    px(c, 6,5, '#d0a020'); px(c, 7,5, '#201810');
+    px(c, 8,5, '#d0a020'); px(c, 9,5, '#201810');
+    // Nose + fangs
+    px(c, 7,6, '#201810'); px(c, 8,6, '#201810');
+    px(c, 6,7, '#e0e0d8'); px(c, 9,7, '#e0e0d8');
+    // Scar
+    px(c, 5,5, '#a83030'); px(c, 5,6, '#a83030');
+    // Neck
+    px(c, 7,8, '#686860'); px(c, 8,8, '#686860');
+    // Dark iron armor
+    r(c, 4,9,8,3, '#484850');
+    r(c, 5,9,6,3, '#505058');
+    px(c, 7,9, '#585860'); px(c, 8,9, '#585860');
+    // Spikes
+    px(c, 3,9, '#606068'); px(c, 3,8, '#585860');
+    px(c, 12,9, '#606068'); px(c, 12,8, '#585860');
+  }
+},
+
+// ─── 11. Human Mage ───
+{
+  name: 'Human Mage', race: 'Human', class_: 'Mage',
+  drawChar(c) {
+    // Hair
+    r(c, 6,3,4,1, '#2a1810'); r(c, 5,4,6,1, '#3a2818');
+    px(c, 5,5, '#2a1810'); px(c, 10,5, '#2a1810');
+    // Face
+    r(c, 6,5,4,3, '#e8b878');
+    // Eyes
+    px(c, 6,5, '#e8e8f0'); px(c, 7,5, '#4838a0');
+    px(c, 8,5, '#e8e8f0'); px(c, 9,5, '#4838a0');
+    // Mouth
+    px(c, 7,7, '#c08060'); px(c, 8,7, '#c08060');
+    // Neck
+    px(c, 7,8, '#d0a060'); px(c, 8,8, '#d0a060');
+    // Robes
+    r(c, 5,9,6,1, '#3050b0');
+    r(c, 4,10,8,2, '#283890'); r(c, 5,10,6,2, '#3848a8');
+    // Staff glow
+    px(c, 3,8, '#50b8e0'); px(c, 3,9, '#70d0f0'); px(c, 3,10, '#50b8e0');
+  }
+},
+
+// ─── 12. Human Rogue ───
+{
+  name: 'Human Rogue', race: 'Human', class_: 'Rogue',
+  drawChar(c) {
+    // Hood
+    r(c, 6,3,4,1, '#282020'); r(c, 5,4,6,1, '#302828');
+    px(c, 4,5, '#201818'); px(c, 11,5, '#201818');
+    // Face (partially masked)
+    r(c, 6,5,4,2, '#e8b878');
+    r(c, 6,7,4,1, '#383030'); // mask
+    // Eyes
+    px(c, 6,5, '#e0e0e0'); px(c, 7,5, '#384030');
+    px(c, 8,5, '#e0e0e0'); px(c, 9,5, '#384030');
+    // Neck
+    px(c, 7,8, '#383030'); px(c, 8,8, '#383030');
+    // Leather
+    r(c, 4,9,8,3, '#302820'); r(c, 5,9,6,3, '#3a3028');
+    px(c, 7,9, '#484038'); px(c, 8,9, '#484038');
+    // Twin daggers
+    px(c, 3,9, '#90a0b0'); px(c, 3,10, '#708090');
+    px(c, 12,9, '#90a0b0'); px(c, 12,10, '#708090');
+  }
+},
+
+// ─── 13. Elf Warrior ───
+{
+  name: 'Elf Warrior', race: 'Elf', class_: 'Warrior',
+  drawChar(c) {
+    // Hair (platinum)
+    r(c, 6,3,4,1, '#d0d0e0'); r(c, 5,4,6,1, '#c0c0d0');
+    px(c, 5,5, '#b0b0c0'); px(c, 10,5, '#b0b0c0');
+    // Ears
+    px(c, 4,5, '#e0d0b8'); px(c, 3,4, '#e0d0b8');
+    px(c, 11,5, '#e0d0b8'); px(c, 12,4, '#e0d0b8');
+    // Face
+    r(c, 6,5,4,3, '#e8d8c0');
+    // Eyes
+    px(c, 6,5, '#c0d0e8'); px(c, 7,5, '#3050a0');
+    px(c, 8,5, '#c0d0e8'); px(c, 9,5, '#3050a0');
+    // Mouth
+    px(c, 7,7, '#c0a088'); px(c, 8,7, '#c0a088');
+    // Neck
+    px(c, 7,8, '#d0c0a0'); px(c, 8,8, '#d0c0a0');
+    // Silver armor
+    r(c, 5,9,6,1, '#a0a8b8');
+    r(c, 4,10,8,2, '#7880a0'); r(c, 5,10,6,2, '#8890b0');
+    px(c, 7,10, '#a0a8c0'); px(c, 8,10, '#a0a8c0');
+    // Cape
+    px(c, 4,10, '#2040a0'); px(c, 4,11, '#2040a0');
+    px(c, 11,10, '#2040a0'); px(c, 11,11, '#2040a0');
+  }
+},
+
+// ─── 14. Elf Cleric ───
+{
+  name: 'Elf Cleric', race: 'Elf', class_: 'Cleric',
+  drawChar(c) {
+    // Hair (golden blonde)
+    r(c, 6,3,4,1, '#d0a850'); r(c, 5,4,6,1, '#c09840');
+    px(c, 5,5, '#b89038'); px(c, 10,5, '#b89038');
+    // Ears
+    px(c, 4,5, '#e0d0b8'); px(c, 3,4, '#e0d0b8');
+    px(c, 11,5, '#e0d0b8'); px(c, 12,4, '#e0d0b8');
+    // Face
+    r(c, 6,5,4,3, '#e8d8c0');
+    // Eyes
+    px(c, 6,5, '#e8e8f0'); px(c, 7,5, '#40a060');
+    px(c, 8,5, '#e8e8f0'); px(c, 9,5, '#40a060');
+    // Mouth
+    px(c, 7,7, '#c0a088'); px(c, 8,7, '#c0a088');
+    // Neck
+    px(c, 7,8, '#d0c0a0'); px(c, 8,8, '#d0c0a0');
+    // White/gold robes
+    r(c, 5,9,6,1, '#e8d860');
+    r(c, 4,10,8,2, '#d0c8b0'); r(c, 5,10,6,2, '#e0d8c0');
+    // Holy glow
+    px(c, 7,10, '#f0e880'); px(c, 8,10, '#f0e880');
+    px(c, 7,11, '#e0d060'); px(c, 8,11, '#e0d060');
+  }
+},
+
+// ─── 15. Dwarf Bard ───
+{
+  name: 'Dwarf Bard', race: 'Dwarf', class_: 'Bard',
+  drawChar(c) {
+    // Hair
+    r(c, 5,3,6,1, '#885020'); r(c, 5,4,6,1, '#704018');
+    px(c, 5,5, '#885020'); px(c, 10,5, '#885020');
+    // Face (wider)
+    r(c, 5,5,6,2, '#d8a870');
+    // Eyes
+    px(c, 6,5, '#e0e0d8'); px(c, 7,5, '#305020');
+    px(c, 8,5, '#e0e0d8'); px(c, 9,5, '#305020');
+    // Braided beard
+    r(c, 5,7,6,2, '#a86828');
+    px(c, 6,9, '#986020'); px(c, 9,9, '#986020');
+    // Colorful outfit
+    r(c, 4,9,8,1, '#d0a030');
+    r(c, 4,10,4,2, '#8030a0'); r(c, 8,10,4,2, '#c04838');
+    r(c, 5,10,2,2, '#9840b0'); r(c, 9,10,2,2, '#d05848');
+    // Lute
+    px(c, 3,10, '#8a6028'); px(c, 3,11, '#a07030'); px(c, 2,11, '#8a6028');
+  }
+},
+
+// ─── 16. Tiefling Warrior ───
+{
+  name: 'Tiefling Warrior', race: 'Tiefling', class_: 'Warrior',
+  drawChar(c) {
+    // Horns (larger)
+    px(c, 4,2, '#3a1818'); px(c, 4,3, '#3a1818'); px(c, 5,2, '#481820');
+    px(c, 11,2, '#3a1818'); px(c, 11,3, '#3a1818'); px(c, 10,2, '#481820');
+    // Hair
+    r(c, 6,3,4,1, '#201010'); r(c, 5,4,6,1, '#2a1818');
+    // Face (deep red)
+    r(c, 6,5,4,3, '#b83838');
+    px(c, 5,5, '#a03030'); px(c, 10,5, '#a03030');
+    // Eyes (fierce)
+    px(c, 6,5, '#e0c020'); px(c, 7,5, '#301008');
+    px(c, 8,5, '#e0c020'); px(c, 9,5, '#301008');
+    // Mouth (grimace)
+    px(c, 7,7, '#802020'); px(c, 8,7, '#802020');
+    // Neck
+    px(c, 7,8, '#a03030'); px(c, 8,8, '#a03030');
+    // Heavy dark plate
+    r(c, 4,9,8,1, '#505058');
+    r(c, 4,10,8,2, '#383840'); r(c, 5,10,6,2, '#484850');
+    px(c, 7,10, '#505058'); px(c, 8,10, '#505058');
+    // Shoulder spikes
+    px(c, 3,9, '#606068'); px(c, 3,8, '#505058');
+    px(c, 12,9, '#606068'); px(c, 12,8, '#505058');
+  }
+},
+
+// ─── 17. Beastkin Mage ───
+{
+  name: 'Beastkin Mage', race: 'Beastkin', class_: 'Mage',
+  drawChar(c) {
+    // Fox ears (orange)
+    px(c, 5,2, '#c07030'); px(c, 6,2, '#d88040');
+    px(c, 10,2, '#c07030'); px(c, 9,2, '#d88040');
+    // Fur head
+    r(c, 6,3,4,1, '#c07030'); r(c, 5,4,6,1, '#d08038');
+    px(c, 5,5, '#c07030'); px(c, 10,5, '#c07030');
+    // Face (white muzzle)
+    r(c, 6,5,4,2, '#e8d8c0');
+    px(c, 6,7, '#c07030'); px(c, 7,7, '#d8c0a0'); px(c, 8,7, '#d8c0a0'); px(c, 9,7, '#c07030');
+    // Eyes
+    px(c, 6,5, '#40c080'); px(c, 7,5, '#181010');
+    px(c, 8,5, '#40c080'); px(c, 9,5, '#181010');
+    // Nose
+    px(c, 7,6, '#201010'); px(c, 8,6, '#201010');
+    // Neck
+    px(c, 7,8, '#c07030'); px(c, 8,8, '#c07030');
+    // Mystic robes
+    r(c, 5,9,6,1, '#40d0e0');
+    r(c, 4,10,8,2, '#1a1838'); r(c, 5,10,6,2, '#282048');
+    // Magic glow
+    px(c, 3,10, '#40d0e0'); px(c, 3,11, '#30a0b0');
+    px(c, 12,10, '#40d0e0'); px(c, 12,11, '#30a0b0');
+  }
+},
+
+// ─── 18. Beastkin Cleric ───
+{
+  name: 'Beastkin Cleric', race: 'Beastkin', class_: 'Cleric',
+  drawChar(c) {
+    // Bear ears (round)
+    px(c, 5,2, '#6a4830'); px(c, 6,3, '#7a5838');
+    px(c, 10,2, '#6a4830'); px(c, 9,3, '#7a5838');
+    // Fur head
+    r(c, 6,3,4,1, '#6a4830'); r(c, 5,4,6,1, '#7a5838');
+    px(c, 5,5, '#6a4830'); px(c, 10,5, '#6a4830');
+    // Face
+    r(c, 6,5,4,2, '#a08868');
+    px(c, 6,7, '#6a4830'); px(c, 7,7, '#907858'); px(c, 8,7, '#907858'); px(c, 9,7, '#6a4830');
+    // Eyes
+    px(c, 6,5, '#e0d040'); px(c, 7,5, '#201810');
+    px(c, 8,5, '#e0d040'); px(c, 9,5, '#201810');
+    // Nose
+    px(c, 7,6, '#302018'); px(c, 8,6, '#302018');
+    // Neck
+    px(c, 7,8, '#6a4830'); px(c, 8,8, '#6a4830');
+    // White/gold robes
+    r(c, 5,9,6,1, '#e8d860');
+    r(c, 4,10,8,2, '#d0c8b0'); r(c, 5,10,6,2, '#e0d8c0');
+    // Holy symbol
+    px(c, 7,10, '#f0e880'); px(c, 8,10, '#f0e880');
+    px(c, 7,11, '#e0d060'); px(c, 8,11, '#e0d060');
+  }
+},
+
+// ─── 19. Human Ranger ───
+{
+  name: 'Human Ranger', race: 'Human', class_: 'Ranger',
+  drawChar(c) {
+    // Hood
+    r(c, 6,3,4,1, '#2a4828'); r(c, 5,4,6,1, '#385838');
+    px(c, 5,5, '#2a4828'); px(c, 10,5, '#2a4828');
+    // Face
+    r(c, 6,5,4,3, '#e8b878');
+    // Eyes
+    px(c, 6,5, '#e0e0d8'); px(c, 7,5, '#305830');
+    px(c, 8,5, '#e0e0d8'); px(c, 9,5, '#305830');
+    // Mouth
+    px(c, 7,7, '#c08060'); px(c, 8,7, '#c08060');
+    // Neck
+    px(c, 7,8, '#d0a060'); px(c, 8,8, '#d0a060');
+    // Green cloak
+    r(c, 4,9,8,3, '#2a5028'); r(c, 5,9,6,3, '#306830');
+    px(c, 7,9, '#508038'); px(c, 8,9, '#508038');
+    // Bow
+    px(c, 12,8, '#7a5828'); px(c, 12,9, '#7a5828'); px(c, 12,10, '#7a5828');
+    // Quiver
+    px(c, 3,9, '#6a4a20'); px(c, 3,10, '#7a5828');
+  }
+},
+
+// ─── 20. Human Cleric ───
+{
+  name: 'Human Cleric', race: 'Human', class_: 'Cleric',
+  drawChar(c) {
+    // Hair
+    r(c, 6,3,4,1, '#3a2818'); r(c, 5,4,6,1, '#4a3820');
+    px(c, 5,5, '#3a2818'); px(c, 10,5, '#3a2818');
+    // Face
+    r(c, 6,5,4,3, '#e8b878');
+    // Eyes
+    px(c, 6,5, '#e8e8e8'); px(c, 7,5, '#4080a0');
+    px(c, 8,5, '#e8e8e8'); px(c, 9,5, '#4080a0');
+    // Mouth
+    px(c, 7,7, '#c08060'); px(c, 8,7, '#c08060');
+    // Neck
+    px(c, 7,8, '#d0a060'); px(c, 8,8, '#d0a060');
+    // White robes
+    r(c, 5,9,6,1, '#e8d860');
+    r(c, 4,10,8,2, '#d0c8b0'); r(c, 5,10,6,2, '#e0d8c0');
+    // Holy cross
+    px(c, 7,10, '#f0e880'); px(c, 8,10, '#f0e880');
+    px(c, 7,11, '#e0d060'); px(c, 8,11, '#e0d060');
+    // Staff
+    px(c, 3,8, '#d0a030'); px(c, 3,9, '#d0a030'); px(c, 3,10, '#b89028');
+  }
+},
+
+// ─── 21. Elf Rogue ───
+{
+  name: 'Elf Rogue', race: 'Elf', class_: 'Rogue',
+  drawChar(c) {
+    // Hood
+    r(c, 6,3,4,1, '#282830'); r(c, 5,4,6,1, '#303038');
+    px(c, 4,5, '#202028'); px(c, 11,5, '#202028');
+    // Ears
+    px(c, 4,4, '#e0d0b8'); px(c, 3,5, '#e0d0b8');
+    px(c, 11,4, '#e0d0b8'); px(c, 12,5, '#e0d0b8');
+    // Face
+    r(c, 6,5,4,2, '#e8d8c0');
+    r(c, 6,7,4,1, '#303038'); // mask
+    // Eyes
+    px(c, 6,5, '#e0e0e8'); px(c, 7,5, '#404868');
+    px(c, 8,5, '#e0e0e8'); px(c, 9,5, '#404868');
+    // Neck
+    px(c, 7,8, '#303038'); px(c, 8,8, '#303038');
+    // Dark leather
+    r(c, 4,9,8,3, '#282830'); r(c, 5,9,6,3, '#303840');
+    px(c, 7,9, '#384048'); px(c, 8,9, '#384048');
+    // Twin daggers
+    px(c, 3,9, '#a0b0c0'); px(c, 3,10, '#8090a0');
+    px(c, 12,9, '#a0b0c0'); px(c, 12,10, '#8090a0');
+  }
+},
+
+// ─── 22. Elf Bard ───
+{
+  name: 'Elf Bard', race: 'Elf', class_: 'Bard',
+  drawChar(c) {
+    // Hair (flowing silver)
+    r(c, 6,3,4,1, '#b0c0d0'); r(c, 5,4,6,1, '#a0b0c0');
+    px(c, 5,5, '#90a0b0'); px(c, 10,5, '#90a0b0');
+    px(c, 4,5, '#a0b0c0'); px(c, 11,5, '#a0b0c0'); // long hair
+    // Ears
+    px(c, 3,4, '#e0d0b8'); px(c, 12,4, '#e0d0b8');
+    // Face
+    r(c, 6,5,4,3, '#e8d8c0');
+    // Eyes
+    px(c, 6,5, '#e8e8f0'); px(c, 7,5, '#5040b0');
+    px(c, 8,5, '#e8e8f0'); px(c, 9,5, '#5040b0');
+    // Smile
+    px(c, 7,7, '#c0a088'); px(c, 8,7, '#c0a088');
+    // Neck
+    px(c, 7,8, '#d0c0a0'); px(c, 8,8, '#d0c0a0');
+    // Colorful outfit
+    r(c, 5,9,6,1, '#d0a030');
+    r(c, 4,10,8,2, '#5030a0'); r(c, 5,10,6,2, '#6040b0');
+    px(c, 7,10, '#7858c0'); px(c, 8,10, '#7858c0');
+    // Harp
+    px(c, 3,9, '#d0a030'); px(c, 3,10, '#b89028'); px(c, 3,11, '#d0a030');
+  }
+},
+
+// ─── 23. Dwarf Mage ───
+{
+  name: 'Dwarf Mage', race: 'Dwarf', class_: 'Mage',
+  drawChar(c) {
+    // Hat
+    r(c, 6,2,4,1, '#3040a0'); r(c, 5,3,6,2, '#2838a0');
+    // Face (wider)
+    r(c, 5,5,6,2, '#d8a870');
+    // Eyes
+    px(c, 6,5, '#e0e0d8'); px(c, 7,5, '#4838a0');
+    px(c, 8,5, '#e0e0d8'); px(c, 9,5, '#4838a0');
+    // Bushy brows
+    px(c, 6,4, '#704018'); px(c, 7,4, '#704018');
+    px(c, 8,4, '#704018'); px(c, 9,4, '#704018');
+    // Beard
+    r(c, 5,7,6,2, '#885020');
+    r(c, 6,9,4,1, '#704018');
+    // Robes
+    r(c, 4,9,8,1, '#3050b0');
+    r(c, 4,10,8,2, '#283890'); r(c, 5,10,6,2, '#3848a8');
+    // Staff glow
+    px(c, 3,8, '#50b8e0'); px(c, 3,9, '#70d0f0'); px(c, 3,10, '#50b8e0');
+  }
+},
+
+// ─── 24. Dwarf Rogue ───
+{
+  name: 'Dwarf Rogue', race: 'Dwarf', class_: 'Rogue',
+  drawChar(c) {
+    // Hood
+    r(c, 5,3,6,1, '#302820'); r(c, 5,4,6,1, '#3a3028');
+    px(c, 5,5, '#302820'); px(c, 10,5, '#302820');
+    // Face (wider)
+    r(c, 5,5,6,2, '#d8a870');
+    // Eyes
+    px(c, 6,5, '#e0e0d8'); px(c, 7,5, '#384030');
+    px(c, 8,5, '#e0e0d8'); px(c, 9,5, '#384030');
+    // Short beard
+    r(c, 5,7,6,1, '#704018');
+    px(c, 6,8, '#604010'); px(c, 9,8, '#604010');
+    // Leather
+    r(c, 4,9,8,3, '#302820'); r(c, 5,9,6,3, '#3a3028');
+    px(c, 7,9, '#484038'); px(c, 8,9, '#484038');
+    // Daggers
+    px(c, 3,9, '#90a0b0'); px(c, 3,10, '#708090');
+    px(c, 12,9, '#90a0b0'); px(c, 12,10, '#708090');
+  }
+},
+
+// ─── 25. Dwarf Ranger ───
+{
+  name: 'Dwarf Ranger', race: 'Dwarf', class_: 'Ranger',
+  drawChar(c) {
+    // Hair
+    r(c, 5,3,6,1, '#704018'); r(c, 5,4,6,1, '#604010');
+    px(c, 5,5, '#704018'); px(c, 10,5, '#704018');
+    // Face (wider)
+    r(c, 5,5,6,2, '#d8a870');
+    // Eyes
+    px(c, 6,5, '#e0e0d8'); px(c, 7,5, '#406020');
+    px(c, 8,5, '#e0e0d8'); px(c, 9,5, '#406020');
+    // Beard
+    r(c, 5,7,6,2, '#885020');
+    r(c, 6,9,4,1, '#704018');
+    // Green cloak
+    r(c, 4,9,8,1, '#386830');
+    r(c, 4,10,8,2, '#2a5028'); r(c, 5,10,6,2, '#306830');
+    // Crossbow
+    px(c, 12,9, '#6a4a20'); px(c, 12,10, '#6a4a20');
+    px(c, 11,9, '#808890');
+  }
+},
+
+// ─── 26. Tiefling Ranger ───
+{
+  name: 'Tiefling Ranger', race: 'Tiefling', class_: 'Ranger',
+  drawChar(c) {
+    // Horns
+    px(c, 5,2, '#3a1818'); px(c, 4,3, '#3a1818');
+    px(c, 10,2, '#3a1818'); px(c, 11,3, '#3a1818');
+    // Hood
+    r(c, 6,3,4,1, '#2a4828'); r(c, 5,4,6,1, '#385838');
+    // Face (red)
+    r(c, 6,5,4,3, '#c04848');
+    px(c, 5,5, '#a03838'); px(c, 10,5, '#a03838');
+    // Eyes
+    px(c, 6,5, '#f0e060'); px(c, 7,5, '#302010');
+    px(c, 8,5, '#f0e060'); px(c, 9,5, '#302010');
+    // Mouth
+    px(c, 7,7, '#903030'); px(c, 8,7, '#903030');
+    // Neck
+    px(c, 7,8, '#a03838'); px(c, 8,8, '#a03838');
+    // Green cloak
+    r(c, 4,9,8,3, '#2a5028'); r(c, 5,9,6,3, '#306830');
+    px(c, 7,9, '#508038'); px(c, 8,9, '#508038');
+    // Bow
+    px(c, 12,8, '#7a5828'); px(c, 12,9, '#7a5828'); px(c, 12,10, '#7a5828');
+  }
+},
+
+// ─── 27. Tiefling Cleric ───
+{
+  name: 'Tiefling Cleric', race: 'Tiefling', class_: 'Cleric',
+  drawChar(c) {
+    // Horns
+    px(c, 5,2, '#3a1818'); px(c, 4,3, '#3a1818');
+    px(c, 10,2, '#3a1818'); px(c, 11,3, '#3a1818');
+    // Hair
+    r(c, 6,3,4,1, '#201010'); r(c, 5,4,6,1, '#2a1818');
+    // Face (red)
+    r(c, 6,5,4,3, '#c04848');
+    px(c, 5,5, '#a03838'); px(c, 10,5, '#a03838');
+    // Eyes
+    px(c, 6,5, '#f0e060'); px(c, 7,5, '#302010');
+    px(c, 8,5, '#f0e060'); px(c, 9,5, '#302010');
+    // Mouth
+    px(c, 7,7, '#903030'); px(c, 8,7, '#903030');
+    // Neck
+    px(c, 7,8, '#a03838'); px(c, 8,8, '#a03838');
+    // White/gold robes
+    r(c, 5,9,6,1, '#e8d860');
+    r(c, 4,10,8,2, '#d0c8b0'); r(c, 5,10,6,2, '#e0d8c0');
+    // Holy symbol
+    px(c, 7,10, '#f0e880'); px(c, 8,10, '#f0e880');
+    px(c, 7,11, '#e0d060'); px(c, 8,11, '#e0d060');
+  }
+},
+
+// ─── 28. Tiefling Bard ───
+{
+  name: 'Tiefling Bard', race: 'Tiefling', class_: 'Bard',
+  drawChar(c) {
+    // Horns
+    px(c, 5,2, '#3a1818'); px(c, 4,3, '#3a1818');
+    px(c, 10,2, '#3a1818'); px(c, 11,3, '#3a1818');
+    // Hair
+    r(c, 6,3,4,1, '#4a1838'); r(c, 5,4,6,1, '#5a2048');
+    px(c, 5,5, '#4a1838'); px(c, 10,5, '#4a1838');
+    // Face (red)
+    r(c, 6,5,4,3, '#c04848');
+    // Eyes
+    px(c, 6,5, '#f0e060'); px(c, 7,5, '#302010');
+    px(c, 8,5, '#f0e060'); px(c, 9,5, '#302010');
+    // Smile
+    px(c, 7,7, '#903030'); px(c, 8,7, '#903030');
+    // Neck
+    px(c, 7,8, '#a03838'); px(c, 8,8, '#a03838');
+    // Colorful outfit
+    r(c, 5,9,6,1, '#d0a030');
+    r(c, 4,10,8,2, '#6838b0'); r(c, 5,10,6,2, '#7848c0');
+    // Lute
+    px(c, 3,10, '#8a6028'); px(c, 3,11, '#a07030');
+  }
+},
+
+// ─── 29. Beastkin Rogue ───
+{
+  name: 'Beastkin Rogue', race: 'Beastkin', class_: 'Rogue',
+  drawChar(c) {
+    // Cat ears
+    px(c, 5,2, '#404040'); px(c, 6,2, '#585858');
+    px(c, 10,2, '#404040'); px(c, 9,2, '#585858');
+    // Fur head
+    r(c, 6,3,4,1, '#404040'); r(c, 5,4,6,1, '#505050');
+    px(c, 5,5, '#404040'); px(c, 10,5, '#404040');
+    // Face
+    r(c, 6,5,4,2, '#707068');
+    px(c, 6,7, '#404040'); px(c, 7,7, '#585850'); px(c, 8,7, '#585850'); px(c, 9,7, '#404040');
+    // Eyes (cat slit)
+    px(c, 6,5, '#40e060'); px(c, 7,5, '#101008');
+    px(c, 8,5, '#40e060'); px(c, 9,5, '#101008');
+    // Nose
+    px(c, 7,6, '#201810'); px(c, 8,6, '#201810');
+    // Neck
+    px(c, 7,8, '#404040'); px(c, 8,8, '#404040');
+    // Dark leather
+    r(c, 4,9,8,3, '#282020'); r(c, 5,9,6,3, '#302828');
+    px(c, 7,9, '#383030'); px(c, 8,9, '#383030');
+    // Twin daggers
+    px(c, 3,9, '#90a0b0'); px(c, 3,10, '#708090');
+    px(c, 12,9, '#90a0b0'); px(c, 12,10, '#708090');
+  }
+},
+
+// ─── 30. Beastkin Bard ───
+{
+  name: 'Beastkin Bard', race: 'Beastkin', class_: 'Bard',
+  drawChar(c) {
+    // Fox ears (warm)
+    px(c, 5,2, '#c07830'); px(c, 6,2, '#d89040');
+    px(c, 10,2, '#c07830'); px(c, 9,2, '#d89040');
+    // Fur head
+    r(c, 6,3,4,1, '#c07830'); r(c, 5,4,6,1, '#d08840');
+    px(c, 5,5, '#c07830'); px(c, 10,5, '#c07830');
+    // Face
+    r(c, 6,5,4,2, '#e8d8c0');
+    px(c, 6,7, '#c07830'); px(c, 7,7, '#d8c0a0'); px(c, 8,7, '#d8c0a0'); px(c, 9,7, '#c07830');
+    // Eyes
+    px(c, 6,5, '#50b060'); px(c, 7,5, '#181010');
+    px(c, 8,5, '#50b060'); px(c, 9,5, '#181010');
+    // Nose
+    px(c, 7,6, '#201010'); px(c, 8,6, '#201010');
+    // Neck
+    px(c, 7,8, '#c07830'); px(c, 8,8, '#c07830');
+    // Colorful outfit
+    r(c, 5,9,6,1, '#d0a030');
+    r(c, 4,10,8,2, '#6838b0'); r(c, 5,10,6,2, '#7848c0');
+    // Lute
+    px(c, 3,10, '#8a6028'); px(c, 3,11, '#a07030'); px(c, 2,11, '#8a6028');
+  }
+},
+
+]; // end avatars
+
+
+// ══════════════════════════════════════
+// ── Render Engine & UI ──
+// ══════════════════════════════════════
+
+const SZ = 16;
+const EXPORT = 512;
+let activeBg = 0;
+
+// ── Draw composite: background + character ──
+const CHAR_OFFSET_Y = 4; // push character down for avatar/portrait feel
+function drawComposite(ctx, bgIdx, charIdx) {
+  ctx.clearRect(0, 0, SZ, SZ);
+  backgrounds[bgIdx].draw(ctx);
+  ctx.save();
+  ctx.translate(0, CHAR_OFFSET_Y);
+  avatars[charIdx].drawChar(ctx);
+  ctx.restore();
+}
+
+// ── Build background swatches ──
+const swatchEl = document.getElementById('bgSwatches');
+backgrounds.forEach((bg, i) => {
+  const wrap = document.createElement('div');
+  wrap.className = 'bg-swatch' + (i === 0 ? ' active' : '');
+  wrap.onclick = () => selectBg(i);
+
+  const cv = document.createElement('canvas');
+  cv.width = SZ; cv.height = SZ;
+  const ctx = cv.getContext('2d');
+  bg.draw(ctx);
+  // draw a tiny silhouette preview
+  r(ctx, 6,4,4,4, 'rgba(200,200,200,0.3)');
+  r(ctx, 5,9,6,2, 'rgba(200,200,200,0.2)');
+
+  wrap.appendChild(cv);
+  swatchEl.appendChild(wrap);
+});
+
+function selectBg(idx) {
+  activeBg = idx;
+  document.querySelectorAll('.bg-swatch').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+  refreshAll();
+}
+
+// ── Build avatar grid ──
+const gridEl = document.getElementById('grid');
+const canvases = [];
+
+avatars.forEach((avatar, i) => {
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const cv = document.createElement('canvas');
+  cv.width = SZ; cv.height = SZ;
+  canvases.push(cv);
+
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  drawComposite(ctx, activeBg, i);
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'name';
+  nameEl.textContent = avatar.name;
+
+  const metaEl = document.createElement('div');
+  metaEl.className = 'meta';
+  metaEl.textContent = `${avatar.race} / ${avatar.class_}`;
+
+  const btn = document.createElement('button');
+  btn.textContent = 'DOWNLOAD';
+  btn.onclick = () => downloadOne(i, activeBg);
+
+  card.appendChild(cv);
+  card.appendChild(nameEl);
+  card.appendChild(metaEl);
+  card.appendChild(btn);
+  gridEl.appendChild(card);
+});
+
+function refreshAll() {
+  canvases.forEach((cv, i) => {
+    const ctx = cv.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    drawComposite(ctx, activeBg, i);
+  });
+}
+
+// ── Export helpers ──
+function exportOne(charIdx, bgIdx) {
+  const tmp = document.createElement('canvas');
+  tmp.width = SZ; tmp.height = SZ;
+  const tctx = tmp.getContext('2d');
+  tctx.imageSmoothingEnabled = false;
+  drawComposite(tctx, bgIdx, charIdx);
+
+  const out = document.createElement('canvas');
+  out.width = EXPORT; out.height = EXPORT;
+  const octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(tmp, 0, 0, EXPORT, EXPORT);
+  return out;
+}
+
+function triggerDownload(canvas, filename) {
+  const a = document.createElement('a');
+  a.download = filename;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+function downloadOne(charIdx, bgIdx) {
+  const av = avatars[charIdx], bg = backgrounds[bgIdx];
+  const name = `nfa_${av.race.toLowerCase()}_${av.class_.toLowerCase()}_${bg.name.toLowerCase().replace(/\s/g,'')}.png`;
+  triggerDownload(exportOne(charIdx, bgIdx), name);
+}
+
+async function downloadAll() {
+  for (let i = 0; i < avatars.length; i++) {
+    downloadOne(i, activeBg);
+    await new Promise(r => setTimeout(r, 250));
+  }
+}
+
+async function batchExport() {
+  for (let bi = 0; bi < backgrounds.length; bi++) {
+    for (let ci = 0; ci < avatars.length; ci++) {
+      downloadOne(ci, bi);
+      await new Promise(r => setTimeout(r, 150));
+    }
+  }
+}
+</script>
+</body>
+</html>

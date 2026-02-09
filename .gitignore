@@ -1,0 +1,40 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.DS_Store
+
+# Contracts
+contracts/artifacts
+contracts/cache
+contracts/typechain-types
+contracts/deployments
+contracts/.openzeppelin
+
+# Frontend
+frontend/dist
+frontend/dist-ssr
+logs
+*.log
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Reference (separate repo)
+reference/
+
+# Claude memory files
+CLAUDE.md
+**/CLAUDE.md
+
+# Package locks (keep contracts one, ignore others)
+frontend/package-lock.json
+backend/package-lock.json

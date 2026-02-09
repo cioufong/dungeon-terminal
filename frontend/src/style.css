@@ -1,0 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+
+:root {
+  --white: #fff;
+  --black: #000;
+  --yellow: #ffff00;
+  --orange: #ff9933;
+  --red: #ff0000;
+  --gray: #666;
+  --dim: #333;
+  --font: 'DotGothic16', 'Courier New', monospace;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app {
+  height: 100%;
+  background: var(--black);
+  color: var(--white);
+  font-family: var(--font);
+  overflow: hidden;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--black); }
+::-webkit-scrollbar-thumb { background: var(--dim); }

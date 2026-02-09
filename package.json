@@ -1,0 +1,14 @@
+{
+  "name": "dungeon-terminal",
+  "private": true,
+  "workspaces": ["frontend", "backend"],
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c magenta,cyan \"npm -w backend run dev\" \"npm -w frontend run dev\"",
+    "dev:server": "npm -w backend run dev",
+    "dev:client": "npm -w frontend run dev",
+    "build": "npm -w frontend run build && npm -w backend run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
