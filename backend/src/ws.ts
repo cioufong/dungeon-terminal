@@ -2,6 +2,7 @@ import type { WebSocket } from 'ws'
 import { GameSession } from './session.js'
 import { streamGMResponse } from './gm.js'
 import { buildSystemPrompt } from './prompts.js'
+import { postProcessScene } from './scene-postprocessor.js'
 import type { ClientMessage, ServerMessage, HPUpdate } from './types.js'
 
 const sessions = new Map<WebSocket, GameSession>()
@@ -74,6 +75,14 @@ async function handleInit(
     }
   }
 
+  // Post-process: inject missing SCENE commands
+  const injected = postProcessScene(result, session, session.floor)
+  for (const msg of injected) {
+    send(ws, msg)
+    const sm = msg as { command: string; args: string[] }
+    session.updateScene(sm.command, sm.args)
+  }
+
   session.addAssistantMessage(result.rawText)
 
   send(ws, { type: 'stream_end' })
@@ -144,6 +153,14 @@ async function handleCommand(
         }
       }
     }
+  }
+
+  // Post-process: inject missing SCENE commands
+  const injected = postProcessScene(result, session, session.floor)
+  for (const msg of injected) {
+    send(ws, msg)
+    const sm = msg as { command: string; args: string[] }
+    session.updateScene(sm.command, sm.args)
   }
 
   session.addAssistantMessage(result.rawText)
