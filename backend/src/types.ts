@@ -12,6 +12,7 @@ export interface NFATraitData {
 // --- Party member sent during init (extends frontend PartyMember) ---
 
 export interface InitPartyMember {
+  tokenId: number
   name: string
   level: number
   className: string

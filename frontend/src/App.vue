@@ -43,6 +43,18 @@
       </div>
     </div>
 
+    <!-- Exit confirm overlay -->
+    <div v-if="showExitConfirm" class="overlay exit-confirm-overlay">
+      <div class="overlay-box exit-confirm-box">
+        <p class="exit-confirm-title">{{ t.exitConfirmTitle }}</p>
+        <p class="exit-confirm-desc">{{ t.exitConfirmDesc }}</p>
+        <div class="exit-confirm-actions">
+          <button class="overlay-btn exit-leave" @click="confirmExit">{{ t.exitConfirmYes }}</button>
+          <button class="overlay-btn" @click="showExitConfirm = false">{{ t.exitConfirmNo }}</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Game Over overlay -->
     <div v-if="isGameOver" class="overlay game-over-overlay">
       <div class="overlay-box game-over-box">
@@ -105,6 +117,7 @@ const { initializing, gameOver: isGameOver, floorCleared: isFloorCleared, victor
 
 const showRecruit = ref(false)
 const showStageSelect = ref(false)
+const showExitConfirm = ref(false)
 const hasParty = computed(() => nfaStore.hasParty)
 const inGame = computed(() => hasParty.value && !showStageSelect.value)
 
@@ -145,6 +158,11 @@ function onStageBack() {
 }
 
 function onExitDungeon() {
+  showExitConfirm.value = true
+}
+
+function confirmExit() {
+  showExitConfirm.value = false
   gameStore.retryGame()
   nfaStore.clearParty()
   showRecruit.value = false
@@ -255,6 +273,33 @@ function onRetry() {
 }
 .overlay-btn.secondary:hover {
   background: var(--gray);
+  color: var(--black);
+}
+
+/* Exit Confirm */
+.exit-confirm-box { border: 2px solid var(--yellow); }
+.exit-confirm-title {
+  color: var(--yellow);
+  font-size: 20px;
+  letter-spacing: 4px;
+  margin-bottom: 8px;
+}
+.exit-confirm-desc {
+  color: var(--gray);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+.exit-confirm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.exit-leave {
+  border-color: var(--red);
+  color: var(--red);
+}
+.exit-leave:hover {
+  background: var(--red);
   color: var(--black);
 }
 

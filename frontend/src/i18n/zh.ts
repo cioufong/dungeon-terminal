@@ -123,6 +123,12 @@ export default {
   xpLabel: '经验',
   levelLabel: 'LV',
 
+  // Exit confirm
+  exitConfirmTitle: '[ 离开地牢？ ]',
+  exitConfirmDesc: '当前楼层的进度将会丢失。',
+  exitConfirmYes: '离开',
+  exitConfirmNo: '留下',
+
   // Sound
   soundOn: '音效 开',
   soundOff: '音效 关',

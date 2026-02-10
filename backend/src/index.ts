@@ -2,6 +2,7 @@ import express from 'express'
 import { createServer } from 'http'
 import { WebSocketServer } from 'ws'
 import { handleConnection } from './ws.js'
+import { initBlockchain } from './blockchain.js'
 
 const app = express()
 const server = createServer(app)
@@ -14,6 +15,8 @@ app.get('/health', (_req, res) => {
 // WebSocket server on /ws path
 const wss = new WebSocketServer({ server, path: '/ws' })
 wss.on('connection', handleConnection)
+
+initBlockchain()
 
 const PORT = parseInt(process.env.PORT || '3001', 10)
 server.listen(PORT, () => {

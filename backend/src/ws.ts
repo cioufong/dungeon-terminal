@@ -3,6 +3,7 @@ import { GameSession } from './session.js'
 import { streamGMResponse } from './gm.js'
 import { buildSystemPrompt } from './prompts.js'
 import { postProcessScene } from './scene-postprocessor.js'
+import { grantXPBatch, recordAdventure, isBlockchainEnabled } from './blockchain.js'
 import type { ClientMessage, ServerMessage, HPUpdate } from './types.js'
 
 const sessions = new Map<WebSocket, GameSession>()
@@ -67,11 +68,14 @@ async function handleInit(
     send(ws, { type: 'hp_update', updates: hpUpdates })
   }
 
-  // Track scene state from GM response
+  // Track scene state and accumulate XP from GM response
   for (const m of result.messages) {
     if (m.type === 'scene') {
       const sm = m as { type: 'scene'; command: string; args: string[] }
       session.updateScene(sm.command, sm.args)
+    }
+    if (m.type === 'xp_gain') {
+      session.accumulateXP((m as { type: 'xp_gain'; amount: number }).amount)
     }
   }
 
@@ -134,11 +138,16 @@ async function handleCommand(
     send(ws, { type: 'hp_update', updates: hpUpdates })
   }
 
-  // Track scene state + check for state changes
+  // Track scene state + check for state changes + accumulate XP
+  let floorCleared = false
+  let defeated = false
   for (const m of result.messages) {
     if (m.type === 'scene') {
       const sm = m as { type: 'scene'; command: string; args: string[] }
       session.updateScene(sm.command, sm.args)
+    }
+    if (m.type === 'xp_gain') {
+      session.accumulateXP((m as { type: 'xp_gain'; amount: number }).amount)
     }
     if (m.type === 'sys') {
       const text = (m as { type: 'sys'; text: string }).text.toLowerCase()
@@ -146,13 +155,54 @@ async function handleCommand(
         session.inCombat = true
       } else if (text.includes('combat end') || text.includes('victory') || text.includes('战斗结束') || text.includes('胜利')) {
         session.inCombat = false
-      } else if (text.includes('floor') || text.includes('层') || text.includes('樓')) {
+      }
+      if (text.includes('floor') || text.includes('层') || text.includes('樓')) {
         const floorMatch = text.match(/(?:floor|第)\s*(\d+)/)
         if (floorMatch) {
           session.floor = parseInt(floorMatch[1]!, 10)
+          floorCleared = true
         }
       }
+      if (text.includes('victory') || text.includes('胜利') || text.includes('勝利')) {
+        floorCleared = true
+      }
+      if (text.includes('game over') || text.includes('defeat') || text.includes('全灭') || text.includes('全滅') || text.includes('团灭') || text.includes('團滅')) {
+        defeated = true
+      }
     }
+  }
+
+  // Flush accumulated XP on-chain when floor is cleared
+  if (floorCleared && isBlockchainEnabled()) {
+    const grants = session.flushPendingXP()
+    if (grants.length > 0) {
+      grantXPBatch(grants).catch(err =>
+        console.error('[WS] XP on-chain flush failed:', err)
+      )
+    }
+    // Record adventure: result=1 (cleared)
+    const advData = session.getAdventureData(session.floor, 1)
+    for (const tokenId of advData.tokenIds) {
+      recordAdventure(tokenId, advData.floor, advData.result, advData.xpEarned, advData.killCount)
+        .catch(err => console.error('[WS] recordAdventure (cleared) failed:', err))
+    }
+    session.resetFloorTracking()
+  }
+
+  // Record adventure on defeat: result=2 (defeated)
+  if (defeated && isBlockchainEnabled()) {
+    const grants = session.flushPendingXP()
+    if (grants.length > 0) {
+      grantXPBatch(grants).catch(err =>
+        console.error('[WS] XP on-chain flush (defeat) failed:', err)
+      )
+    }
+    const advData = session.getAdventureData(session.floor, 2)
+    for (const tokenId of advData.tokenIds) {
+      recordAdventure(tokenId, advData.floor, advData.result, advData.xpEarned, advData.killCount)
+        .catch(err => console.error('[WS] recordAdventure (defeated) failed:', err))
+    }
+    session.resetFloorTracking()
   }
 
   // Post-process: inject missing SCENE commands
@@ -192,6 +242,23 @@ export function handleConnection(ws: WebSocket): void {
   })
 
   ws.on('close', () => {
+    const session = sessions.get(ws)
+    if (session && isBlockchainEnabled()) {
+      const grants = session.flushPendingXP()
+      if (grants.length > 0) {
+        grantXPBatch(grants).catch(err =>
+          console.error('[WS] XP on-chain flush on disconnect failed:', err)
+        )
+      }
+      // Record adventure as fled (result=0) if there was any activity
+      if (session.killCount > 0 || session.floorXPEarned > 0) {
+        const advData = session.getAdventureData(session.floor, 0)
+        for (const tokenId of advData.tokenIds) {
+          recordAdventure(tokenId, advData.floor, advData.result, advData.xpEarned, advData.killCount)
+            .catch(err => console.error('[WS] recordAdventure (fled) failed:', err))
+        }
+      }
+    }
     sessions.delete(ws)
     console.log('[WS] Client disconnected')
   })

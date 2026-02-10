@@ -126,6 +126,12 @@ export interface Messages {
   xpLabel: string
   levelLabel: string
 
+  // Exit confirm
+  exitConfirmTitle: string
+  exitConfirmDesc: string
+  exitConfirmYes: string
+  exitConfirmNo: string
+
   // Sound
   soundOn: string
   soundOff: string

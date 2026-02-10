@@ -19,6 +19,14 @@ export class GameSession {
   sceneEntities: string[] = []
   partyPos: [number, number] = [9, 8]
 
+  // Blockchain XP accumulator
+  tokenIds: number[]
+  pendingXP: Map<number, number>
+
+  // Adventure tracking (per-floor stats, flushed on floor clear/defeat/disconnect)
+  killCount: number = 0
+  floorXPEarned: number = 0
+
   constructor(party: InitPartyMember[], locale?: string, floor?: number, stageName?: string) {
     this.party = party
     this.locale = locale || 'en'
@@ -30,10 +38,33 @@ export class GameSession {
     this.sceneMap = 'chamber'
     this.lastActivity = Date.now()
 
+    // Initialize blockchain XP tracking
+    this.tokenIds = party.map(m => m.tokenId).filter(id => id > 0)
+    this.pendingXP = new Map()
+
     // Initialize HP from party data
     for (const m of party) {
       this.partyHP.set(m.name, { hp: m.hp, maxHp: m.maxHp })
     }
+  }
+
+  accumulateXP(amount: number): void {
+    for (const tokenId of this.tokenIds) {
+      const current = this.pendingXP.get(tokenId) || 0
+      this.pendingXP.set(tokenId, current + amount)
+    }
+    this.floorXPEarned += amount
+  }
+
+  flushPendingXP(): { tokenId: number; amount: number }[] {
+    const grants: { tokenId: number; amount: number }[] = []
+    for (const [tokenId, amount] of this.pendingXP) {
+      if (amount > 0) {
+        grants.push({ tokenId, amount })
+      }
+    }
+    this.pendingXP.clear()
+    return grants
   }
 
   updateScene(command: string, args: string[]): void {
@@ -50,6 +81,7 @@ export class GameSession {
       }
       case 'remove':
         this.sceneEntities = this.sceneEntities.filter(id => id !== (args[0] || ''))
+        this.killCount++
         break
       case 'move_party':
         this.partyPos = [parseInt(args[0] || '9', 10), parseInt(args[1] || '8', 10)]
@@ -109,5 +141,26 @@ export class GameSession {
 
   isStale(): boolean {
     return Date.now() - this.lastActivity > STALE_MS
+  }
+
+  getAdventureData(floor: number, result: number): {
+    tokenIds: number[]
+    floor: number
+    result: number
+    xpEarned: number
+    killCount: number
+  } {
+    return {
+      tokenIds: this.tokenIds,
+      floor,
+      result,
+      xpEarned: this.floorXPEarned,
+      killCount: this.killCount,
+    }
+  }
+
+  resetFloorTracking(): void {
+    this.killCount = 0
+    this.floorXPEarned = 0
   }
 }

@@ -112,11 +112,11 @@ contract DungeonNFA is
 
     // NFA data
     mapping(uint256 => NFATraits) private _traits;
-    mapping(uint256 => NFAProgression) private _progression;
-    mapping(uint256 => AgentMetadata) private _agentMeta;
+    mapping(uint256 => NFAProgression) internal _progression;
+    mapping(uint256 => AgentMetadata) internal _agentMeta;
 
     // XP thresholds per level (cumulative)
-    uint32[20] private _xpThresholds;
+    uint32[20] internal _xpThresholds;
 
     // Renderer for on-chain SVG tokenURI (added in upgrade)
     INFARenderer public renderer;
@@ -374,7 +374,7 @@ contract DungeonNFA is
     /**
      * @dev Grant XP to an NFA. MVP: only owner (game server wallet).
      */
-    function grantXP(uint256 tokenId, uint32 amount) external onlyOwner {
+    function grantXP(uint256 tokenId, uint32 amount) external virtual onlyOwner {
         require(_ownerOf(tokenId) != address(0), "Token does not exist");
         NFAProgression storage prog = _progression[tokenId];
         require(prog.active, "NFA inactive");

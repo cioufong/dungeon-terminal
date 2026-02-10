@@ -67,6 +67,7 @@ export const useNFAStore = defineStore('nfa', () => {
     const pm = nfaToPartyMember(nfa)
     return {
       ...pm,
+      tokenId: nfa.tokenId,
       traits: {
         race: nfa.traits.race,
         class_: nfa.traits.class_,

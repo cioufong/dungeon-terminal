@@ -123,6 +123,12 @@ export default {
   xpLabel: 'XP',
   levelLabel: 'LV',
 
+  // Exit confirm
+  exitConfirmTitle: '[ LEAVE DUNGEON? ]',
+  exitConfirmDesc: 'Progress on this floor will be lost.',
+  exitConfirmYes: 'LEAVE',
+  exitConfirmNo: 'STAY',
+
   // Sound
   soundOn: 'SFX ON',
   soundOff: 'SFX OFF',
