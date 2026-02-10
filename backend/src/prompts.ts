@@ -239,6 +239,7 @@ You MUST respond using ONLY these tagged line formats. One tag per line. No mark
   If the entire party dies (all HP = 0), send: [SYS] — Party Wipe —
 - [XP]: Award experience points after combat victories or quest completion. Amount: weak enemy 10-20, normal 25-50, strong enemy 50-80, boss 100-200. XP is shared by the whole party.
 - [CHOICE]: MUST be the LAST line of every response. Provide 2-4 short action phrases separated by |. Each option under 15 characters. Represent distinct meaningful player actions. In combat: attack/defend/ability/flee. In exploration: move/interact/rest. Do NOT repeat the same choices. Adapt to the current situation.
+- ONLY use the tags listed above. NEVER invent new tags like [COMBAT:...], [ACTION:...], [ATTACK:...], etc. They will be IGNORED by the system.
 
 ### SCENE Commands (Visual Control) — CRITICAL
 Use [SCENE] tags to control the visual game map. The frontend renders a pixel-art dungeon view.
@@ -291,6 +292,33 @@ When a player attempts something with uncertain outcome:
 - Damage: 1d6 + STR/DEX mod (minimum 1)
 - Companion actions are autonomous based on class role
 - Combat ends when all enemies are defeated or the party flees
+- NEVER invent custom tags like [COMBAT:...]. Only use the tags defined above.
+- When combat starts, you MUST: (1) [SYS] Combat initiated (2) [SCENE:spawn] each enemy (3) [SCENE:effect] for attacks
+- When dealing damage, you MUST include [HP:Name:-amount] for EVERY hit. Without this tag, HP will NOT change.
+- When an enemy dies, you MUST include [SCENE:remove:{entity_id}]
+
+### Combat Example
+\`\`\`
+[SYS] Combat initiated — 2 Slimes emerge!
+[SCENE:spawn:slime:12:6]
+[SCENE:spawn:slime:6:6]
+[NFA:Elf #1] "Watch out!"
+[ROLL] Elf #1 attacks Slime — d20+3 = 17 vs AC 11 — Hit!
+[DMG] Elf #1 deals 9 damage to Slime!
+[SCENE:effect:fireball:12:6]
+[NFA:Dwarf #2] "My turn!"
+[ROLL] Dwarf #2 attacks Slime — d20+4 = 22 — Critical Hit!
+[DMG] Dwarf #2 deals 15 damage to Slime!
+[SCENE:effect:fireball:6:6]
+[GM] The first slime shatters! The second slime retaliates, spraying acid at Dwarf #2.
+[SCENE:effect:smoke:12:6]
+[SCENE:remove:slime_1]
+[ROLL] Slime attacks Dwarf #2 — d20+1 = 14 vs AC 12 — Hit!
+[DMG] Slime deals 6 acid damage to Dwarf #2!
+[HP:Dwarf #2:-6]
+[XP:15]
+[CHOICE:Attack slime|Defend|Use ability|Retreat]
+\`\`\`
 
 ## THE PARTY
 

@@ -19,7 +19,36 @@ interface ParsedHP {
   delta: number
 }
 
-function parseLine(line: string): { msg: ServerMessage | null; hp: ParsedHP | null } {
+interface ParseResult { msg: ServerMessage | null; hp: ParsedHP | null }
+
+function parseLine(line: string): ParseResult[] {
+  const results: ParseResult[] = []
+
+  // Extract inline tags that may be embedded in narrative text.
+  // We pull out [SCENE:...], [CHOICE:...], [XP:...], [HP:...] from anywhere in the line,
+  // then process the remaining text as a normal tagged/untagged line.
+  const inlineTags: string[] = []
+  const cleaned = line.replace(/\[(?:SCENE|CHOICE|XP|HP):[^\]]+\]/g, (match) => {
+    inlineTags.push(match)
+    return ''
+  }).trim()
+
+  // Process the remaining text (without inline tags)
+  if (cleaned.length > 0) {
+    const r = parseSingleTag(cleaned)
+    if (r.msg || r.hp) results.push(r)
+  }
+
+  // Process extracted inline tags
+  for (const tag of inlineTags) {
+    const r = parseSingleTag(tag)
+    if (r.msg || r.hp) results.push(r)
+  }
+
+  return results.length > 0 ? results : [{ msg: null, hp: null }]
+}
+
+function parseSingleTag(line: string): ParseResult {
   // [GM] text
   let m = line.match(/^\[GM\]\s*(.+)$/)
   if (m) return { msg: { type: 'gm', text: m[1]! }, hp: null }
@@ -41,25 +70,25 @@ function parseLine(line: string): { msg: ServerMessage | null; hp: ParsedHP | nu
   if (m) return { msg: { type: 'sys', text: m[1]! }, hp: null }
 
   // [SCENE:command:arg1:arg2:...]
-  m = line.match(/^\[SCENE:(.+)\]$/)
+  m = line.match(/\[SCENE:(.+?)\]/)
   if (m) {
     const parts = m[1]!.split(':')
     return { msg: { type: 'scene', command: parts[0]!, args: parts.slice(1) }, hp: null }
   }
 
   // [CHOICE:option1|option2|option3]
-  m = line.match(/^\[CHOICE:(.+)\]$/)
+  m = line.match(/\[CHOICE:(.+?)\]/)
   if (m) {
     const options = m[1]!.split('|').map(s => s.trim()).filter(Boolean)
     return { msg: { type: 'choices', options }, hp: null }
   }
 
   // [XP:amount]
-  m = line.match(/^\[XP:(\d+)\]$/)
+  m = line.match(/\[XP:(\d+)\]/)
   if (m) return { msg: { type: 'xp_gain', amount: parseInt(m[1]!, 10) } as ServerMessage, hp: null }
 
   // [HP:Name:±N]
-  m = line.match(/^\[HP:(.+?):([+-]?\d+)\]$/)
+  m = line.match(/\[HP:(.+?):([+-]?\d+)\]/)
   if (m) return { msg: null, hp: { name: m[1]!, delta: parseInt(m[2]!, 10) } }
 
   // Unrecognized line — treat as GM narration if non-empty
@@ -104,9 +133,10 @@ function parseLines(
   for (const raw of text.split('\n')) {
     const line = raw.trim()
     if (line.length === 0) continue
-    const { msg, hp } = parseLine(line)
-    if (msg) { messages.push(msg); onMessage(msg) }
-    if (hp) hpChanges.push(hp)
+    for (const { msg, hp } of parseLine(line)) {
+      if (msg) { messages.push(msg); onMessage(msg) }
+      if (hp) hpChanges.push(hp)
+    }
   }
 }
 
@@ -174,9 +204,10 @@ function streamViaCLI(
           buffer = buffer.slice(idx + 1)
 
           if (line.length === 0) continue
-          const { msg, hp } = parseLine(line)
-          if (msg) { messages.push(msg); onMessage(msg) }
-          if (hp) hpChanges.push(hp)
+          for (const { msg, hp } of parseLine(line)) {
+            if (msg) { messages.push(msg); onMessage(msg) }
+            if (hp) hpChanges.push(hp)
+          }
         }
       })
     } else {
@@ -196,9 +227,10 @@ function streamViaCLI(
         // Process remaining streaming buffer
         const remaining = buffer.trim()
         if (remaining.length > 0) {
-          const { msg, hp } = parseLine(remaining)
-          if (msg) { messages.push(msg); onMessage(msg) }
-          if (hp) hpChanges.push(hp)
+          for (const { msg, hp } of parseLine(remaining)) {
+            if (msg) { messages.push(msg); onMessage(msg) }
+            if (hp) hpChanges.push(hp)
+          }
         }
       } else {
         // Parse JSON response to extract session_id + result text
@@ -267,13 +299,14 @@ async function streamViaSDK(
 
           if (line.length === 0) continue
 
-          const { msg, hp } = parseLine(line)
-          if (msg) {
-            messages.push(msg)
-            onMessage(msg)
-          }
-          if (hp) {
-            hpChanges.push(hp)
+          for (const { msg, hp } of parseLine(line)) {
+            if (msg) {
+              messages.push(msg)
+              onMessage(msg)
+            }
+            if (hp) {
+              hpChanges.push(hp)
+            }
           }
         }
       }
@@ -281,13 +314,14 @@ async function streamViaSDK(
 
     const remaining = buffer.trim()
     if (remaining.length > 0) {
-      const { msg, hp } = parseLine(remaining)
-      if (msg) {
-        messages.push(msg)
-        onMessage(msg)
-      }
-      if (hp) {
-        hpChanges.push(hp)
+      for (const { msg, hp } of parseLine(remaining)) {
+        if (msg) {
+          messages.push(msg)
+          onMessage(msg)
+        }
+        if (hp) {
+          hpChanges.push(hp)
+        }
       }
     }
   } catch (err) {

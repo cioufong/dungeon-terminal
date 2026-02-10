@@ -25,7 +25,7 @@ const ENEMY_TYPES = new Set([
 ])
 
 const DEATH_KEYWORDS = /\b(defeat|destroy|kill|slay|collapse|dies|died|slain|vanquish|fall|fallen|perish|消滅|擊敗|死亡|倒下|击败|消灭)\b/i
-const EXPLORE_KEYWORDS = /\b(advance|move|walk|continue|proceed|enter|venture|step|explore|前進|進入|走|繼續|前进|进入|继续)\b/i
+const EXPLORE_KEYWORDS = /(advance|move|walk|continue|proceed|enter|venture|step|explore|forward|前進|進入|走|繼續|前进|进入|继续|向前|探索|往前|深入)/i
 const FLOOR_TRANSITION_KEYWORDS = /\b(floor|descend|next level|deeper|下一層|進入.*層|下一层|进入.*层)\b/i
 const COMBAT_START_KEYWORDS = /\b(combat initiated|combat start|ambush|attack|engage|战斗开始|戰鬥開始|進入戰鬥|进入战斗)\b/i
 
@@ -172,6 +172,12 @@ export function postProcessScene(
         console.log(`[PostProcessor] Rule 2: smoke + remove:${target}`)
       }
     }
+  }
+
+  // Auto-clear inCombat when no enemies remain on scene
+  if (session.inCombat && getEnemyEntities(session).length === 0) {
+    session.inCombat = false
+    console.log('[PostProcessor] Auto-cleared inCombat (no enemies remain)')
   }
 
   // Rule 3: Party movement (exploration only)
