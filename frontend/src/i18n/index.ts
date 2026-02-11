@@ -136,6 +136,26 @@ export interface Messages {
   soundOn: string
   soundOff: string
 
+  // Admin
+  adminTitle: string
+  adminTabStats: string
+  adminTabContract: string
+  adminTabPrompts: string
+  adminContractStatus: string
+  adminTokenQuery: string
+  adminQuery: string
+  adminStateControl: string
+  adminDangerZone: string
+  adminConfirm: string
+  adminConfirmYes: string
+  adminConfirmNo: string
+  adminSections: string
+  adminSave: string
+  adminReset: string
+  adminResetAll: string
+  adminSelectSection: string
+  adminBtn: string
+
   races: readonly string[]
   classes: readonly string[]
   personalities: readonly string[]

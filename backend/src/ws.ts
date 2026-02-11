@@ -102,6 +102,17 @@ async function handleCommand(
     return
   }
 
+  // Sync HP state from frontend (accounts for frontend-only level-up changes)
+  if (msg.hpState) {
+    for (const [name, hp] of Object.entries(msg.hpState)) {
+      const entry = session.partyHP.get(name)
+      if (entry) {
+        entry.hp = hp.hp
+        entry.maxHp = hp.maxHp
+      }
+    }
+  }
+
   // Augment player message with scene + HP context so the AI stays synchronized
   const ctx = session.getFullContext()
   session.addUserMessage(`${ctx}\nPlayer: ${msg.text}`)

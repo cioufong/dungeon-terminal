@@ -1,6 +1,12 @@
 <template>
   <WalletButton v-if="!inGame" />
 
+  <!-- Admin button (only visible to contract owner) -->
+  <button v-if="isAdmin" class="admin-btn-fixed" @click="showAdmin = true">
+    {{ t.adminBtn }}
+  </button>
+  <AdminPanel v-if="showAdmin" @close="showAdmin = false" />
+
   <!-- State: loading dungeon (party formed, waiting for AI init) -->
   <div v-if="hasParty && !showStageSelect && initializing" class="loading-screen">
     <div class="loading-box">
@@ -97,6 +103,7 @@ import { ref, watch, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useWeb3 } from './composables/useWeb3'
 import { useNFA } from './composables/useNFA'
+import { useAdmin } from './composables/useAdmin'
 import { useNFAStore } from './stores/nfa'
 import { useGameStore } from './stores/game'
 import { useI18n } from './i18n'
@@ -107,8 +114,11 @@ import GameScene from './components/GameScene.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import PartyPanel from './components/PartyPanel.vue'
 import StageSelect from './components/StageSelect.vue'
+import AdminPanel from './components/admin/AdminPanel.vue'
 
 const { isConnected, isCorrectChain } = useWeb3()
+const { isOwner: isAdmin, checkOwner } = useAdmin()
+const showAdmin = ref(false)
 const { ownedNFAs, loadMyNFAs, loadFreeMints, hasCharacter } = useNFA()
 const nfaStore = useNFAStore()
 const gameStore = useGameStore()
@@ -134,6 +144,7 @@ watch([isConnected, isCorrectChain], async ([connected, correct]) => {
     await loadMyNFAs()
     await loadFreeMints()
     nfaStore.setOwnedNFAs(ownedNFAs.value)
+    checkOwner()
   }
 }, { immediate: true })
 
@@ -367,6 +378,29 @@ function onRetry() {
 @keyframes victoryGlow {
   0%, 100% { text-shadow: 0 0 8px rgba(255, 215, 0, 0.3); }
   50% { text-shadow: 0 0 20px rgba(255, 215, 0, 0.6); }
+}
+
+/* Admin button */
+.admin-btn-fixed {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 120;
+  background: transparent;
+  border: 1px solid var(--yellow);
+  color: var(--yellow);
+  font-family: var(--font);
+  font-size: 10px;
+  letter-spacing: 2px;
+  padding: 4px 10px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+.admin-btn-fixed:hover {
+  opacity: 1;
+  background: var(--yellow);
+  color: var(--black);
 }
 
 /* Mobile RWD */

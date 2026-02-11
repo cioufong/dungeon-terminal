@@ -78,8 +78,8 @@ export function useGameWS() {
     ws?.send(JSON.stringify({ type: 'init', party, locale, floor, stageName }))
   }
 
-  function sendCommand(text: string): void {
-    ws?.send(JSON.stringify({ type: 'command', text }))
+  function sendCommand(text: string, hpState?: Record<string, { hp: number; maxHp: number }>): void {
+    ws?.send(JSON.stringify({ type: 'command', text, hpState }))
   }
 
   function setMessageHandler(handler: (msg: ServerMessage) => void): void {

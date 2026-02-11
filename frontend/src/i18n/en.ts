@@ -133,6 +133,26 @@ export default {
   soundOn: 'SFX ON',
   soundOff: 'SFX OFF',
 
+  // Admin
+  adminTitle: '[ ADMIN PANEL ]',
+  adminTabStats: 'STATS',
+  adminTabContract: 'CONTRACT',
+  adminTabPrompts: 'PROMPTS',
+  adminContractStatus: 'Contract Status',
+  adminTokenQuery: 'Token Query',
+  adminQuery: 'QUERY',
+  adminStateControl: 'State Control',
+  adminDangerZone: 'Danger Zone',
+  adminConfirm: '[ CONFIRM ]',
+  adminConfirmYes: 'CONFIRM',
+  adminConfirmNo: 'CANCEL',
+  adminSections: 'SECTIONS',
+  adminSave: 'SAVE',
+  adminReset: 'REVERT',
+  adminResetAll: 'RESET ALL TO DEFAULT',
+  adminSelectSection: 'Select a section to edit',
+  adminBtn: 'ADMIN',
+
   // Enums
   races: ['Human', 'Elf', 'Dwarf', 'Tiefling', 'Beastkin'],
   classes: ['Warrior', 'Mage', 'Rogue', 'Ranger', 'Cleric', 'Bard'],

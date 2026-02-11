@@ -72,11 +72,11 @@ export const useGameStore = defineStore('game', () => {
   // Auto-increment counters for entity IDs from GM
   let entityCounter = 0
 
-  // Party with live HP from server
+  // Party with live HP from server (both hp and maxHp)
   const party = computed<PartyMember[]>(() =>
     nfaStore.partyMembers.map(m => {
       const hp = partyHP.value.get(m.name)
-      return hp ? { ...m, hp: hp.hp } : m
+      return hp ? { ...m, hp: hp.hp, maxHp: hp.maxHp } : m
     })
   )
 
@@ -428,7 +428,12 @@ export const useGameStore = defineStore('game', () => {
     addMessage('player', text)
 
     if (gameWS.connected.value) {
-      gameWS.sendCommand(text)
+      // Send current HP state so backend stays in sync with frontend level-ups
+      const hpState: Record<string, { hp: number; maxHp: number }> = {}
+      for (const [name, hp] of partyHP.value) {
+        hpState[name] = { hp: hp.hp, maxHp: hp.maxHp }
+      }
+      gameWS.sendCommand(text, hpState)
     } else {
       addMessage('sys', '— Not connected to server. —')
     }

@@ -133,6 +133,26 @@ export default {
   soundOn: '音效 开',
   soundOff: '音效 关',
 
+  // Admin
+  adminTitle: '[ 管理面板 ]',
+  adminTabStats: '状态',
+  adminTabContract: '合约',
+  adminTabPrompts: '提示词',
+  adminContractStatus: '合约状态',
+  adminTokenQuery: 'Token 查询',
+  adminQuery: '查询',
+  adminStateControl: '状态控制',
+  adminDangerZone: '危险区域',
+  adminConfirm: '[ 确认 ]',
+  adminConfirmYes: '确认',
+  adminConfirmNo: '取消',
+  adminSections: '段落',
+  adminSave: '保存',
+  adminReset: '还原',
+  adminResetAll: '重置全部为预设',
+  adminSelectSection: '选择一个段落进行编辑',
+  adminBtn: '管理',
+
   // Enums
   races: ['人类', '精灵', '矮人', '魔裔', '兽族'],
   classes: ['战士', '法师', '盗贼', '游侠', '牧师', '吟游诗人'],

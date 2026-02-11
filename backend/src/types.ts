@@ -26,7 +26,7 @@ export interface InitPartyMember {
 
 export type ClientMessage =
   | { type: 'init'; party: InitPartyMember[]; locale?: string; floor?: number; stageName?: string }
-  | { type: 'command'; text: string }
+  | { type: 'command'; text: string; hpState?: Record<string, { hp: number; maxHp: number }> }
 
 // --- WebSocket protocol: Server → Client ---
 
