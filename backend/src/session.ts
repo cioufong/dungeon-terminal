@@ -79,10 +79,17 @@ export class GameSession {
         this.sceneEntities.push(`${type}_${count + 1}`)
         break
       }
-      case 'remove':
-        this.sceneEntities = this.sceneEntities.filter(id => id !== (args[0] || ''))
-        this.killCount++
+      case 'remove': {
+        const removeId = args[0] || ''
+        // Only count enemy kills, not NPC/chest/door removes
+        const ENEMY_TYPES = ['skeleton', 'slime', 'goblin', 'wraith', 'golem', 'dragon']
+        const entityType = removeId.replace(/_\d+$/, '')
+        if (ENEMY_TYPES.includes(entityType)) {
+          this.killCount++
+        }
+        this.sceneEntities = this.sceneEntities.filter(id => id !== removeId)
         break
+      }
       case 'move_party':
         this.partyPos = [parseInt(args[0] || '9', 10), parseInt(args[1] || '8', 10)]
         break
@@ -109,7 +116,28 @@ export class GameSession {
   }
 
   applyHP(name: string, delta: number): HPUpdate | null {
-    const entry = this.partyHP.get(name)
+    let entry = this.partyHP.get(name)
+
+    // Resolve generic "player" to actual player character name
+    if (!entry && name.toLowerCase() === 'player') {
+      const pc = this.party.find(m => m.isCharacter)
+      if (pc) {
+        entry = this.partyHP.get(pc.name)
+        if (entry) name = pc.name
+      }
+    }
+
+    // Fuzzy match: try partial name matching (e.g. "兽族" matches "兽族 #1")
+    if (!entry) {
+      for (const [memberName, hp] of this.partyHP) {
+        if (memberName.includes(name) || name.includes(memberName)) {
+          entry = hp
+          name = memberName
+          break
+        }
+      }
+    }
+
     if (!entry) return null
 
     entry.hp = Math.max(0, Math.min(entry.maxHp, entry.hp + delta))
