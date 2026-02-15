@@ -3,7 +3,7 @@ import { GameSession } from './session.js'
 import { streamGMResponse } from './gm.js'
 import { buildSystemPrompt } from './prompts.js'
 import { postProcessScene } from './scene-postprocessor.js'
-import { grantXPBatch, recordAdventure, isBlockchainEnabled } from './blockchain.js'
+import { grantXPBatch, recordAdventure, updateVault, updateExperience, isBlockchainEnabled } from './blockchain.js'
 import type { ClientMessage, ServerMessage, HPUpdate } from './types.js'
 
 const sessions = new Map<WebSocket, GameSession>()
@@ -21,6 +21,33 @@ function send(ws: WebSocket, msg: ServerMessage): void {
   if (ws.readyState === 1 /* OPEN */) {
     ws.send(JSON.stringify(msg))
   }
+}
+
+/** Flush XP, record adventure, and update agent metadata (experience + vault) on-chain. */
+function flushBlockchainState(session: GameSession, result: number): void {
+  if (!isBlockchainEnabled()) return
+
+  const grants = session.flushPendingXP()
+  if (grants.length > 0) {
+    grantXPBatch(grants).catch(err =>
+      console.error('[WS] XP on-chain flush failed:', err)
+    )
+  }
+
+  const advData = session.getAdventureData(session.floor, result)
+  const expSummary = session.generateExperienceSummary(result)
+  const { vaultURI, vaultHash } = session.generateVaultData(result)
+
+  for (const tokenId of advData.tokenIds) {
+    recordAdventure(tokenId, advData.floor, advData.result, advData.xpEarned, advData.killCount)
+      .catch(err => console.error('[WS] recordAdventure failed:', err))
+    updateExperience(tokenId, expSummary)
+      .catch(err => console.error('[WS] updateExperience failed:', err))
+    updateVault(tokenId, vaultURI, vaultHash)
+      .catch(err => console.error('[WS] updateVault failed:', err))
+  }
+
+  session.resetFloorTracking()
 }
 
 async function handleInit(
@@ -183,37 +210,14 @@ async function handleCommand(
     }
   }
 
-  // Flush accumulated XP on-chain when floor is cleared
-  if (floorCleared && isBlockchainEnabled()) {
-    const grants = session.flushPendingXP()
-    if (grants.length > 0) {
-      grantXPBatch(grants).catch(err =>
-        console.error('[WS] XP on-chain flush failed:', err)
-      )
-    }
-    // Record adventure: result=1 (cleared)
-    const advData = session.getAdventureData(session.floor, 1)
-    for (const tokenId of advData.tokenIds) {
-      recordAdventure(tokenId, advData.floor, advData.result, advData.xpEarned, advData.killCount)
-        .catch(err => console.error('[WS] recordAdventure (cleared) failed:', err))
-    }
-    session.resetFloorTracking()
+  // Flush XP + record adventure + update agent metadata on floor clear
+  if (floorCleared) {
+    flushBlockchainState(session, 1) // result=1 (cleared)
   }
 
-  // Record adventure on defeat: result=2 (defeated)
-  if (defeated && isBlockchainEnabled()) {
-    const grants = session.flushPendingXP()
-    if (grants.length > 0) {
-      grantXPBatch(grants).catch(err =>
-        console.error('[WS] XP on-chain flush (defeat) failed:', err)
-      )
-    }
-    const advData = session.getAdventureData(session.floor, 2)
-    for (const tokenId of advData.tokenIds) {
-      recordAdventure(tokenId, advData.floor, advData.result, advData.xpEarned, advData.killCount)
-        .catch(err => console.error('[WS] recordAdventure (defeated) failed:', err))
-    }
-    session.resetFloorTracking()
+  // Flush XP + record adventure + update agent metadata on defeat
+  if (defeated) {
+    flushBlockchainState(session, 2) // result=2 (defeated)
   }
 
   // Post-process: inject missing SCENE commands
@@ -254,19 +258,17 @@ export function handleConnection(ws: WebSocket): void {
 
   ws.on('close', () => {
     const session = sessions.get(ws)
-    if (session && isBlockchainEnabled()) {
-      const grants = session.flushPendingXP()
-      if (grants.length > 0) {
-        grantXPBatch(grants).catch(err =>
-          console.error('[WS] XP on-chain flush on disconnect failed:', err)
-        )
-      }
+    if (session) {
       // Record adventure as fled (result=0) if there was any activity
       if (session.killCount > 0 || session.floorXPEarned > 0) {
-        const advData = session.getAdventureData(session.floor, 0)
-        for (const tokenId of advData.tokenIds) {
-          recordAdventure(tokenId, advData.floor, advData.result, advData.xpEarned, advData.killCount)
-            .catch(err => console.error('[WS] recordAdventure (fled) failed:', err))
+        flushBlockchainState(session, 0) // result=0 (fled)
+      } else if (isBlockchainEnabled()) {
+        // Still flush any pending XP even without adventure activity
+        const grants = session.flushPendingXP()
+        if (grants.length > 0) {
+          grantXPBatch(grants).catch(err =>
+            console.error('[WS] XP on-chain flush on disconnect failed:', err)
+          )
         }
       }
     }

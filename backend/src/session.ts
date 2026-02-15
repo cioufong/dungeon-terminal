@@ -1,3 +1,4 @@
+import { keccak256, toHex } from 'viem'
 import type { InitPartyMember, ConversationMessage, HPUpdate } from './types.js'
 
 const MAX_HISTORY = 50
@@ -185,6 +186,51 @@ export class GameSession {
       xpEarned: this.floorXPEarned,
       killCount: this.killCount,
     }
+  }
+
+  generateExperienceSummary(result: number): string {
+    const floor = this.floor
+    const kills = this.killCount
+    const xp = this.floorXPEarned
+
+    if (result === 1) {
+      return `Veteran adventurer. Cleared Floor ${floor}. ${kills} enemies defeated. ${xp} XP earned.`
+    } else if (result === 2) {
+      return `Fell on Floor ${floor} after defeating ${kills} enemies.`
+    } else {
+      return `Retreated from Floor ${floor}. ${kills} enemies defeated before withdrawal.`
+    }
+  }
+
+  generateVaultData(result: number): { vaultURI: string; vaultHash: `0x${string}` } {
+    const highlights = this.conversationHistory
+      .filter(m => m.role === 'assistant')
+      .flatMap(m => {
+        const matches = m.content.match(/\[SYS\][^\n]*/g)
+        return matches ? matches.map(s => s.replace(/^\[SYS\]\s*/, '')) : []
+      })
+
+    const partyNames = this.party.map(m => `${m.className} #${m.tokenId}`)
+
+    const vaultJSON = JSON.stringify({
+      version: 1,
+      game: 'dungeon-terminal',
+      tokenId: this.tokenIds[0] ?? 0,
+      adventure: {
+        floor: this.floor,
+        result: result === 1 ? 'cleared' : result === 2 ? 'defeated' : 'fled',
+        xpEarned: this.floorXPEarned,
+        killCount: this.killCount,
+        timestamp: Math.floor(Date.now() / 1000),
+      },
+      party: partyNames,
+      sessionHighlights: highlights.slice(-10),
+    })
+
+    const vaultURI = `data:application/json;base64,${Buffer.from(vaultJSON).toString('base64')}`
+    const vaultHash = keccak256(toHex(vaultJSON))
+
+    return { vaultURI, vaultHash }
   }
 
   resetFloorTracking(): void {

@@ -140,6 +140,15 @@ contract DungeonNFAV2 is DungeonNFA {
         emit MetadataUpdated(tokenId);
     }
 
+    function updateExperience(
+        uint256 tokenId,
+        string calldata experience
+    ) external onlyGameServer {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        _agentMeta[tokenId].experience = experience;
+        emit MetadataUpdated(tokenId);
+    }
+
     // =============================================
     // INTERNAL
     // =============================================

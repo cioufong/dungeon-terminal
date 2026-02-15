@@ -41,6 +41,17 @@ const updateVaultAbi = [{
   stateMutability: 'nonpayable',
 }] as const
 
+const updateExperienceAbi = [{
+  type: 'function',
+  name: 'updateExperience',
+  inputs: [
+    { name: 'tokenId', type: 'uint256' },
+    { name: 'experience', type: 'string' },
+  ],
+  outputs: [],
+  stateMutability: 'nonpayable',
+}] as const
+
 let walletClient: WalletClient | null = null
 let publicClient: PublicClient | null = null
 let contractAddress: `0x${string}` | null = null
@@ -182,6 +193,38 @@ export async function updateVault(
       console.error(`[Blockchain] updateVault attempt ${attempt}/${MAX_RETRIES} failed: ${msg}`)
       if (attempt === MAX_RETRIES) {
         console.error(`[Blockchain] updateVault gave up after ${MAX_RETRIES} retries`)
+      }
+    }
+  }
+}
+
+export async function updateExperience(
+  tokenId: number,
+  experience: string,
+): Promise<void> {
+  if (!enabled || !walletClient || !publicClient || !contractAddress || !account) return
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const hash = await walletClient.writeContract({
+        chain: bscTestnet,
+        account: account!,
+        address: contractAddress,
+        abi: updateExperienceAbi,
+        functionName: 'updateExperience',
+        args: [BigInt(tokenId), experience],
+      })
+
+      console.log(`[Blockchain] updateExperience(tokenId=${tokenId}) tx: ${hash}`)
+
+      await publicClient.waitForTransactionReceipt({ hash })
+      console.log(`[Blockchain] updateExperience confirmed: ${hash}`)
+      return
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`[Blockchain] updateExperience attempt ${attempt}/${MAX_RETRIES} failed: ${msg}`)
+      if (attempt === MAX_RETRIES) {
+        console.error(`[Blockchain] updateExperience gave up after ${MAX_RETRIES} retries`)
       }
     }
   }
