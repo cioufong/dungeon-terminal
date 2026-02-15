@@ -132,6 +132,12 @@ export interface Messages {
   exitConfirmYes: string
   exitConfirmNo: string
 
+  // Disconnect confirm
+  disconnectTitle: string
+  disconnectDesc: string
+  disconnectYes: string
+  disconnectNo: string
+
   // Sound
   soundOn: string
   soundOff: string

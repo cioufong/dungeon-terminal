@@ -1,23 +1,29 @@
 import { ref, computed } from 'vue'
 import { Contract } from 'ethers'
 import { useWeb3 } from './useWeb3'
+import V1_ABI from '../abi/DungeonNFA.json'
 import V2_ABI from '../abi/DungeonNFAV2.json'
+import { getContractAddress } from '../config'
 
-const CONTRACT_ADDRESS = import.meta.env.VITE_NFA_CONTRACT_ADDRESS || ''
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 const isOwner = ref(false)
 const isV2 = ref(false)
 const checking = ref(false)
 
+// Merge V1 + V2 ABIs so both old and new function names work
+const MERGED_ABI = [...V1_ABI, ...V2_ABI.filter((e: any) =>
+  !V1_ABI.some((v: any) => v.name === e.name && v.type === e.type)
+)]
+
 function getContract(): Contract {
   const { signer } = useWeb3()
-  return new Contract(CONTRACT_ADDRESS, V2_ABI, signer.value!)
+  return new Contract(getContractAddress(), MERGED_ABI, signer.value!)
 }
 
 function getReadContract(): Contract {
   const { provider } = useWeb3()
-  return new Contract(CONTRACT_ADDRESS, V2_ABI, provider.value!)
+  return new Contract(getContractAddress(), MERGED_ABI, provider.value!)
 }
 
 /** Check if connected wallet is contract owner */
@@ -143,15 +149,28 @@ async function execTx(
 
 // --- Contract read helpers ---
 
+async function tryCall(contract: Contract, ...names: string[]): Promise<unknown> {
+  for (const name of names) {
+    try { return await contract.getFunction(name)() } catch { /* try next */ }
+  }
+  return null
+}
+
 async function readContractState() {
   const contract = getReadContract()
-  const [owner, paused, treasury, totalSupply, freeMintsPerUser, renderer] = await Promise.all([
+
+  // These exist on both V1 and V2
+  const [owner, paused, freeMintsPerUser] = await Promise.all([
     contract.getFunction('owner')(),
     contract.getFunction('paused')(),
-    contract.getFunction('treasury')(),
-    contract.getFunction('getTotalSupply')(),
     contract.getFunction('freeMintsPerUser')(),
-    contract.getFunction('renderer')(),
+  ])
+
+  // These have different names across versions
+  const [treasury, totalSupply, renderer] = await Promise.all([
+    tryCall(contract, 'treasury', 'treasuryAddress'),
+    tryCall(contract, 'getTotalSupply', 'totalSupply'),
+    tryCall(contract, 'renderer').catch(() => null),
   ])
 
   let version = '1.0.0'
@@ -170,10 +189,10 @@ async function readContractState() {
   return {
     owner: owner as string,
     paused: paused as boolean,
-    treasury: treasury as string,
-    totalSupply: Number(totalSupply),
+    treasury: (treasury as string) || '',
+    totalSupply: Number(totalSupply ?? 0),
     freeMintsPerUser: Number(freeMintsPerUser),
-    renderer: renderer as string,
+    renderer: (renderer as string) || '',
     version,
     maxAdventureLog,
   }
@@ -184,16 +203,16 @@ async function readVRFConfig() {
   const [coordinator, keyHash, subId, callbackGasLimit, requestConfirmations] = await Promise.all([
     contract.getFunction('vrfCoordinator')(),
     contract.getFunction('vrfKeyHash')(),
-    contract.getFunction('vrfSubId')(),
+    tryCall(contract, 'vrfSubId', 'vrfSubscriptionId'),
     contract.getFunction('vrfCallbackGasLimit')(),
-    contract.getFunction('vrfRequestConfirmations')(),
+    tryCall(contract, 'vrfRequestConfirmations', 'vrfConfirmations'),
   ])
   return {
     coordinator: coordinator as string,
     keyHash: keyHash as string,
-    subId: Number(subId),
+    subId: Number(subId ?? 0),
     callbackGasLimit: Number(callbackGasLimit),
-    requestConfirmations: Number(requestConfirmations),
+    requestConfirmations: Number(requestConfirmations ?? 0),
   }
 }
 
@@ -312,12 +331,18 @@ async function checkGameServer(addr: string): Promise<boolean> {
   return contract.getFunction('gameServers')(addr) as Promise<boolean>
 }
 
+function resetAdmin() {
+  isOwner.value = false
+  isV2.value = false
+}
+
 export function useAdmin() {
   return {
     isOwner,
     isV2,
     checking,
     checkOwner,
+    resetAdmin,
     createTxState,
 
     // Contract reads

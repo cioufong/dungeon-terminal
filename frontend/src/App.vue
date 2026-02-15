@@ -22,7 +22,7 @@
     <div class="game-layout">
       <div class="game-top">
         <GameScene class="scene" />
-        <PartyPanel class="party-side" @exit="onExitDungeon" />
+        <PartyPanel class="party-side" @exit="onExitDungeon" @disconnect="onDisconnectRequest" />
       </div>
       <ChatPanel class="chat" />
     </div>
@@ -57,6 +57,18 @@
         <div class="exit-confirm-actions">
           <button class="overlay-btn exit-leave" @click="confirmExit">{{ t.exitConfirmYes }}</button>
           <button class="overlay-btn" @click="showExitConfirm = false">{{ t.exitConfirmNo }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Disconnect confirm overlay -->
+    <div v-if="showDisconnectConfirm" class="overlay exit-confirm-overlay">
+      <div class="overlay-box exit-confirm-box">
+        <p class="exit-confirm-title">{{ t.disconnectTitle }}</p>
+        <p class="exit-confirm-desc">{{ t.disconnectDesc }}</p>
+        <div class="exit-confirm-actions">
+          <button class="overlay-btn exit-leave" @click="confirmDisconnect">{{ t.disconnectYes }}</button>
+          <button class="overlay-btn" @click="showDisconnectConfirm = false">{{ t.disconnectNo }}</button>
         </div>
       </div>
     </div>
@@ -116,8 +128,8 @@ import PartyPanel from './components/PartyPanel.vue'
 import StageSelect from './components/StageSelect.vue'
 import AdminPanel from './components/admin/AdminPanel.vue'
 
-const { isConnected, isCorrectChain } = useWeb3()
-const { isOwner: isAdmin, checkOwner } = useAdmin()
+const { isConnected, isCorrectChain, disconnect } = useWeb3()
+const { isOwner: isAdmin, checkOwner, resetAdmin } = useAdmin()
 const showAdmin = ref(false)
 const { ownedNFAs, loadMyNFAs, loadFreeMints, hasCharacter } = useNFA()
 const nfaStore = useNFAStore()
@@ -128,6 +140,7 @@ const { initializing, gameOver: isGameOver, floorCleared: isFloorCleared, victor
 const showRecruit = ref(false)
 const showStageSelect = ref(false)
 const showExitConfirm = ref(false)
+const showDisconnectConfirm = ref(false)
 const hasParty = computed(() => nfaStore.hasParty)
 const inGame = computed(() => hasParty.value && !showStageSelect.value)
 
@@ -147,6 +160,20 @@ watch([isConnected, isCorrectChain], async ([connected, correct]) => {
     checkOwner()
   }
 }, { immediate: true })
+
+// Reset all state when wallet disconnects
+watch(isConnected, (connected) => {
+  if (!connected) {
+    if (hasParty.value) gameStore.retryGame()
+    nfaStore.clearParty()
+    nfaStore.setOwnedNFAs([])
+    ownedNFAs.value = []
+    showStageSelect.value = false
+    showRecruit.value = false
+    showAdmin.value = false
+    resetAdmin()
+  }
+})
 
 function onMintComplete() {
   showRecruit.value = false
@@ -170,6 +197,20 @@ function onStageBack() {
 
 function onExitDungeon() {
   showExitConfirm.value = true
+}
+
+function onDisconnectRequest() {
+  showDisconnectConfirm.value = true
+}
+
+function confirmDisconnect() {
+  showDisconnectConfirm.value = false
+  gameStore.retryGame()
+  nfaStore.clearParty()
+  showStageSelect.value = false
+  showRecruit.value = false
+  showAdmin.value = false
+  disconnect()
 }
 
 function confirmExit() {
@@ -384,7 +425,7 @@ function onRetry() {
 .admin-btn-fixed {
   position: fixed;
   top: 8px;
-  right: 8px;
+  left: 12px;
   z-index: 120;
   background: transparent;
   border: 1px solid var(--yellow);

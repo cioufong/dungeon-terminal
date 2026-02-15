@@ -3,7 +3,7 @@
     <!-- Wallet + Language header -->
     <div class="panel-header">
       <span class="lang-toggle" @click="toggleLocale">{{ locale === 'en' ? '中' : 'EN' }}</span>
-      <span class="wallet-addr" @click="disconnect" :title="address">{{ shortAddress(address) }}</span>
+      <span class="wallet-addr" @click="emit('disconnect')" :title="address">{{ shortAddress(address) }}</span>
     </div>
     <div class="panel-title">[ PARTY ]</div>
     <div
@@ -45,7 +45,7 @@
     </div>
     <div class="nav-actions">
       <button class="nav-btn exit-btn" @click="emit('exit')">{{ t.navBack }}</button>
-      <button class="nav-btn sfx-btn" @click="toggleSound">{{ sound.enabled.value ? t.soundOn : t.soundOff }}</button>
+      <button class="nav-btn sfx-btn" @click="toggleSound">{{ sound.enabled ? t.soundOn : t.soundOff }}</button>
     </div>
   </div>
 </template>
@@ -64,17 +64,18 @@ const nfaStore = useNFAStore()
 const { party, xp, level, xpToNext } = storeToRefs(store)
 const sound = store.sound
 const { locale, t, toggleLocale } = useI18n()
-const { address, disconnect, shortAddress } = useWeb3()
+const { address, shortAddress } = useWeb3()
 
 const partyNFAs = computed(() => nfaStore.party)
 
 function toggleSound() {
-  sound.enabled.value = !sound.enabled.value
-  if (sound.enabled.value) sound.select()
+  sound.enabled = !sound.enabled
+  if (sound.enabled) sound.select()
 }
 
 const emit = defineEmits<{
   (e: 'exit'): void
+  (e: 'disconnect'): void
 }>()
 
 const prevHP = reactive<Record<string, number>>({})

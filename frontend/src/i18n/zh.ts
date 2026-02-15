@@ -129,6 +129,12 @@ export default {
   exitConfirmYes: '离开',
   exitConfirmNo: '留下',
 
+  // Disconnect confirm
+  disconnectTitle: '[ 断开钱包连接？ ]',
+  disconnectDesc: '你将退出地牢，所有进度将会丢失。',
+  disconnectYes: '断开',
+  disconnectNo: '取消',
+
   // Sound
   soundOn: '音效 开',
   soundOff: '音效 关',

@@ -129,6 +129,12 @@ export default {
   exitConfirmYes: 'LEAVE',
   exitConfirmNo: 'STAY',
 
+  // Disconnect confirm
+  disconnectTitle: '[ DISCONNECT WALLET? ]',
+  disconnectDesc: 'You will exit the dungeon and all progress will be lost.',
+  disconnectYes: 'DISCONNECT',
+  disconnectNo: 'CANCEL',
+
   // Sound
   soundOn: 'SFX ON',
   soundOff: 'SFX OFF',
