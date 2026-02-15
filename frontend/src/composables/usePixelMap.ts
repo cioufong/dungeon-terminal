@@ -1,6 +1,7 @@
 import { onMounted, onUnmounted, watch, type Ref } from 'vue'
 import { getRoom } from '../data/maps'
 import type { SceneEntity, VisualEffect } from '../stores/game'
+// Race/class color palettes for full-body sprites
 
 const T = 16 // tile size
 const MW = 20, MH = 15
@@ -366,10 +367,111 @@ const SPRITE_FN: Record<string, SpriteFn> = {
   wraith: drawWraith, golem: drawGolem, dragon: drawDragon,
 }
 
+// --- Race/Class full-body sprite colors ---
+
+// Skin colors by race: Human, Elf, Dwarf, Tiefling, Beastkin
+const SKIN = ['#d8a878', '#f0d8b0', '#c89868', '#c04848', '#a88848'] as const
+const SKIN_M = ['#c09060', '#e0c898', '#b08050', '#a03838', '#907838'] as const
+
+// Hair colors by race
+const HAIR = ['#4a3020', '#e8d888', '#c06820', '#301030', '#786038'] as const
+
+// Outfit colors by class: Warrior, Mage, Rogue, Ranger, Cleric, Bard
+const OUTFIT = [
+  { body: '#707888', inner: '#8898a8', cape: '#505868', accent: '#a0a8b8' }, // Warrior — steel
+  { body: '#5040a0', inner: '#6858b8', cape: '#3a2878', accent: '#9080d0' }, // Mage — purple
+  { body: '#483828', inner: '#685848', cape: '#302018', accent: '#887058' }, // Rogue — leather
+  { body: '#2a5820', inner: '#3a7830', cape: '#184818', accent: '#58a848' }, // Ranger — green
+  { body: '#c8b870', inner: '#e0d8a0', cape: '#a89848', accent: '#f0e8c0' }, // Cleric — white/gold
+  { body: '#982838', inner: '#c04858', cape: '#701828', accent: '#d87888' }, // Bard — red
+] as const
+
+function drawNFACharacter(
+  cx: Ctx, px: number, py: number, t: number, moving: boolean,
+  race: number, class_: number,
+) {
+  const b = moving ? (Math.floor(t / 150) % 2 ? -1 : 0) : 0
+  const frame = moving ? Math.floor(t / 150) % 2 : 0
+  const sk = SKIN[race] ?? SKIN[0]!
+  const skm = SKIN_M[race] ?? SKIN_M[0]!
+  const hr = HAIR[race] ?? HAIR[0]!
+  const o = OUTFIT[class_] ?? OUTFIT[0]!
+
+  // Shadow
+  r(cx, px + 2, py + 14, 12, 3, 'rgba(0,0,0,.35)')
+  // Boots
+  if (moving) {
+    r(cx, px + 3 + frame * 2, py + 13 + b, 3, 2, '#3a2820')
+    r(cx, px + 10 - frame * 2, py + 13 + b, 3, 2, '#3a2820')
+  } else {
+    r(cx, px + 4, py + 13, 3, 2, '#3a2820'); r(cx, px + 9, py + 13, 3, 2, '#3a2820')
+  }
+  // Cape/outer
+  r(cx, px + 2, py + 5 + b, 12, 8, o.cape); r(cx, px + 3, py + 5 + b, 10, 7, o.body)
+  // Inner torso
+  r(cx, px + 4, py + 5 + b, 8, 7, o.inner)
+  // Chest detail
+  r(cx, px + 5, py + 6 + b, 2, 3, o.accent); r(cx, px + 9, py + 6 + b, 2, 3, o.accent)
+  // Belt
+  r(cx, px + 4, py + 10 + b, 8, 1, '#5a4828'); r(cx, px + 7, py + 10 + b, 2, 1, '#c8a848')
+  // Arms
+  if (moving) {
+    r(cx, px + 1 + frame, py + 6 + b, 2, 5, o.body); r(cx, px + 13 - frame, py + 6 + b, 2, 5, o.body)
+  } else {
+    r(cx, px + 2, py + 6, 2, 5, o.body); r(cx, px + 12, py + 6, 2, 5, o.body)
+  }
+  // Hands
+  r(cx, px + 2, py + 11 + b, 2, 1, sk); r(cx, px + 12, py + 11 + b, 2, 1, sk)
+  // Head — face
+  r(cx, px + 4, py + 1 + b, 8, 5, sk); r(cx, px + 4, py + 4 + b, 8, 2, skm)
+  // Hair
+  r(cx, px + 3, py + b, 10, 3, hr)
+  r(cx, px + 3, py + 1 + b, 2, 3, hr); r(cx, px + 11, py + 1 + b, 2, 3, hr)
+  // Eyes
+  r(cx, px + 5, py + 3 + b, 2, 2, '#fff'); r(cx, px + 9, py + 3 + b, 2, 2, '#fff')
+  // Pupil color by race: Human=brown, Elf=green, Dwarf=brown, Tiefling=red, Beastkin=amber
+  const pupil = ['#331100', '#116622', '#331100', '#cc2222', '#886600'][race] ?? '#111'
+  r(cx, px + 6, py + 3 + b, 1, 2, pupil); r(cx, px + 10, py + 3 + b, 1, 2, pupil)
+
+  // Race-specific features
+  if (race === 1) {
+    // Elf — pointed ears
+    r(cx, px + 2, py + 2 + b, 2, 2, sk); r(cx, px + 12, py + 2 + b, 2, 2, sk)
+  } else if (race === 2) {
+    // Dwarf — wider jaw / beard
+    r(cx, px + 4, py + 5 + b, 8, 2, hr)
+    r(cx, px + 3, py + 4 + b, 2, 2, hr); r(cx, px + 11, py + 4 + b, 2, 2, hr)
+  } else if (race === 3) {
+    // Tiefling — horns
+    r(cx, px + 3, py - 1 + b, 2, 2, '#801830')
+    r(cx, px + 11, py - 1 + b, 2, 2, '#801830')
+  } else if (race === 4) {
+    // Beastkin — ear tufts
+    r(cx, px + 3, py - 1 + b, 3, 2, hr); r(cx, px + 10, py - 1 + b, 3, 2, hr)
+  }
+
+  // Class-specific weapon/detail
+  if (class_ === 0) {
+    // Warrior — sword on side
+    r(cx, px + 14, py + 5 + b, 1, 6, '#a0a8b8'); r(cx, px + 14, py + 4 + b, 1, 1, '#c8a848')
+  } else if (class_ === 1) {
+    // Mage — staff
+    r(cx, px + 14, py + 2 + b, 1, 10, '#8a6828'); r(cx, px + 13, py + 1 + b, 3, 2, '#9080d0')
+  } else if (class_ === 3) {
+    // Ranger — bow
+    r(cx, px + 14, py + 3 + b, 1, 8, '#6a5020')
+    r(cx, px + 15, py + 4 + b, 1, 6, '#887048')
+  } else if (class_ === 4) {
+    // Cleric — shield glow
+    r(cx, px + 0, py + 7 + b, 2, 4, '#e0d890'); r(cx, px + 1, py + 8 + b, 1, 2, '#f0e8c0')
+  }
+}
+
 function drawEntitySprite(
   cx: Ctx, px: number, py: number, t: number,
   type: string, state?: string, moving?: boolean,
   hitTime?: number, removing?: boolean,
+  traits?: { race: number; class_: number; personality: number; talentRarity: number },
 ) {
   // Death fade — reduce alpha over 400ms
   if (removing && hitTime) {
@@ -384,6 +486,11 @@ function drawEntitySprite(
     case 'door': drawDoorEntity(cx, px, py, t, state); break
     case 'npc': drawNPC(cx, px, py, t); break
     default: {
+      // Use race/class full-body sprite for party members with traits
+      if (traits && (type === 'player' || type === 'companion')) {
+        drawNFACharacter(cx, px, py, t, !!moving, traits.race, traits.class_)
+        break
+      }
       const fn = SPRITE_FN[type]
       if (fn) fn(cx, px, py, t, moving)
     }
@@ -674,7 +781,20 @@ export function usePixelMap(
           drawX += Math.sin(t * 0.1) * intensity
         }
       }
-      drawEntitySprite(cx, drawX, drawY, t, e.type, e.state, state.moving, e.hitTime, e.removing)
+      drawEntitySprite(cx, drawX, drawY, t, e.type, e.state, state.moving, e.hitTime, e.removing, e.traits)
+
+      // Enemy HP bar
+      if (e.hp != null && e.maxHp != null && e.maxHp > 0 && !e.removing) {
+        const barW = 12, barH = 2
+        const barX = drawX + (T - barW) / 2
+        const barY = drawY - 3
+        const ratio = Math.max(0, e.hp / e.maxHp)
+        // Background
+        r(cx, barX, barY, barW, barH, '#333')
+        // Fill
+        const color = ratio > 0.5 ? '#3a3' : ratio > 0.25 ? '#da3' : '#d33'
+        if (ratio > 0) r(cx, barX, barY, Math.round(barW * ratio), barH, color)
+      }
     }
 
     // Layer 3: Lighting

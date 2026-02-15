@@ -25,6 +25,11 @@
       </div>
     </div>
 
+    <!-- Loading indicator -->
+    <div v-if="streaming" class="loading-indicator">
+      <span class="loading-dot">.</span><span class="loading-dot">.</span><span class="loading-dot">.</span>
+    </div>
+
     <!-- Choice buttons -->
     <div v-if="choices.length > 0 && !streaming" class="choices">
       <button v-for="c in choices" :key="c" class="choice-btn" @click="pickChoice(c)">
@@ -120,6 +125,24 @@ watch(log, async () => {
 .msg-dmg {
   color: var(--red);
   font-weight: bold;
+}
+
+/* Loading indicator */
+.loading-indicator {
+  padding: 6px 12px;
+  color: var(--gray);
+  font-size: 14px;
+  letter-spacing: 3px;
+  flex-shrink: 0;
+}
+.loading-dot {
+  animation: blink 1.4s infinite both;
+}
+.loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.loading-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes blink {
+  0%, 80%, 100% { opacity: 0.2; }
+  40% { opacity: 1; }
 }
 
 /* Choices */

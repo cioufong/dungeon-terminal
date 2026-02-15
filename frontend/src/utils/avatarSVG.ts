@@ -45,6 +45,22 @@ export function generateAvatarSVG(
 }
 
 /**
+ * Generate SVG with character only (no background) for game canvas overlay.
+ */
+export function generateAvatarSVGNoBg(
+  race: number,
+  class_: number,
+): string {
+  const charRects = CHARACTER_RECTS[race * 6 + class_] ?? []
+
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges" width="16" height="16">' +
+    rectsToSVG(charRects) +
+    '</svg>'
+  )
+}
+
+/**
  * Generate a data URI for use in <img src="...">.
  */
 export function generateAvatarDataURI(

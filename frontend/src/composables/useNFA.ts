@@ -2,8 +2,7 @@ import { ref } from 'vue'
 import { Contract, parseEther } from 'ethers'
 import { useWeb3 } from './useWeb3'
 import ABI from '../abi/DungeonNFA.json'
-
-const CONTRACT_ADDRESS = import.meta.env.VITE_NFA_CONTRACT_ADDRESS || ''
+import { getContractAddress } from '../config'
 
 const FREE_MINT_FEE = parseEther('0.01')
 const PAID_MINT_FEE = parseEther('0.05')
@@ -43,7 +42,7 @@ const lastMintWasFree = ref(false)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getContract(signerOrProvider: any): Contract {
-  return new Contract(CONTRACT_ADDRESS, ABI, signerOrProvider)
+  return new Contract(getContractAddress(), ABI, signerOrProvider)
 }
 
 async function loadFreeMints() {

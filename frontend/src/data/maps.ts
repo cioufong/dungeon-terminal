@@ -190,3 +190,21 @@ export function isWalkable(mapId: string, x: number, y: number): boolean {
   const ch = (room.tiles[y] || '')[x] || 'w'
   return WALKABLE.has(ch)
 }
+
+/** Find nearest walkable tile using BFS spiral search */
+export function findNearestWalkable(mapId: string, x: number, y: number): [number, number] {
+  if (isWalkable(mapId, x, y)) return [x, y]
+  // Spiral search outward up to radius 5
+  for (let r = 1; r <= 5; r++) {
+    for (let dx = -r; dx <= r; dx++) {
+      for (let dy = -r; dy <= r; dy++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue // only ring
+        const nx = x + dx, ny = y + dy
+        if (nx >= 0 && nx < 20 && ny >= 0 && ny < 15 && isWalkable(mapId, nx, ny)) {
+          return [nx, ny]
+        }
+      }
+    }
+  }
+  return [x, y] // last resort
+}

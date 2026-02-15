@@ -5,7 +5,7 @@ import { useGameWS, type ServerMessage, type HPUpdate } from '../composables/use
 import { useI18n } from '../i18n'
 import { useSound } from '../composables/useSound'
 import { getStageById, unlockStage } from '../data/stages'
-import { isWalkable } from '../data/maps'
+import { isWalkable, findNearestWalkable } from '../data/maps'
 
 export interface LogEntry {
   type: 'sys' | 'gm' | 'nfa' | 'player' | 'roll' | 'dmg'
@@ -30,6 +30,13 @@ export interface SceneEntity {
   targetX?: number; targetY?: number  // movement animation target
   hitTime?: number     // performance.now() of last hit (for flash animation)
   removing?: boolean   // true = death fade in progress
+  traits?: { race: number; class_: number; personality: number; talentRarity: number }
+  hp?: number; maxHp?: number // enemy HP for health bar display
+}
+
+// Default HP by enemy type
+const ENEMY_HP: Record<string, number> = {
+  slime: 20, skeleton: 30, goblin: 25, wraith: 35, golem: 60, dragon: 100,
 }
 
 export interface VisualEffect {
@@ -136,7 +143,13 @@ export const useGameStore = defineStore('game', () => {
         setTimeout(() => {
           currentMap.value = newMap
           // Keep all party_* entities, remove everything else
-          sceneEntities.value = sceneEntities.value.filter(e => e.id.startsWith('party_'))
+          // Snap positions to walkable tiles on the new map
+          sceneEntities.value = sceneEntities.value
+            .filter(e => e.id.startsWith('party_'))
+            .map(e => {
+              const [nx, ny] = findNearestWalkable(newMap, e.x, e.y)
+              return { ...e, x: nx, y: ny, targetX: undefined, targetY: undefined }
+            })
           addEffect('map_fade_in', 0, 0, 300)
         }, 300)
         break
@@ -144,18 +157,25 @@ export const useGameStore = defineStore('game', () => {
 
       case 'spawn': {
         const type = args[0] || 'skeleton'
-        const x = parseInt(args[1] || '0', 10)
-        const y = parseInt(args[2] || '0', 10)
+        let x = parseInt(args[1] || '0', 10)
+        let y = parseInt(args[2] || '0', 10)
+        // Clamp and snap to walkable tile
+        const [sx, sy] = findNearestWalkable(currentMap.value, x, y)
+        x = sx; y = sy
         entityCounter++
         const id = `${type}_${entityCounter}`
-        sceneEntities.value = [...sceneEntities.value, { id, type, x, y, state: 'idle' }]
+        const baseHp = ENEMY_HP[type]
+        const floorScale = 1 + (currentFloor.value - 1) * 0.3
+        const hp = baseHp ? Math.round(baseHp * floorScale) : undefined
+        sceneEntities.value = [...sceneEntities.value, { id, type, x, y, state: 'idle', hp, maxHp: hp }]
         break
       }
 
       case 'move': {
         const entityId = args[0] || ''
-        const tx = parseInt(args[1] || '0', 10)
-        const ty = parseInt(args[2] || '0', 10)
+        const rawX = parseInt(args[1] || '0', 10)
+        const rawY = parseInt(args[2] || '0', 10)
+        const [tx, ty] = findNearestWalkable(currentMap.value, rawX, rawY)
         sceneEntities.value = sceneEntities.value.map(e =>
           e.id === entityId ? { ...e, targetX: tx, targetY: ty } : e
         )
@@ -203,18 +223,26 @@ export const useGameStore = defineStore('game', () => {
           !e.id.startsWith('party_') && Math.abs(e.x - ex) <= 1 && Math.abs(e.y - ey) <= 1
         )
         if (hitEntity) {
+          // Reduce enemy HP on hit (estimate damage as ~25% of maxHp per hit)
+          let newHp = hitEntity.hp
+          if (hitEntity.hp != null && hitEntity.maxHp != null) {
+            const dmg = Math.max(1, Math.round(hitEntity.maxHp * 0.25))
+            newHp = Math.max(0, hitEntity.hp - dmg)
+          }
           sceneEntities.value = sceneEntities.value.map(e =>
-            e.id === hitEntity.id ? { ...e, hitTime: performance.now() } : e
+            e.id === hitEntity.id ? { ...e, hitTime: performance.now(), hp: newHp } : e
           )
         }
         break
       }
 
       case 'move_party': {
-        const px = parseInt(args[0] || '9', 10)
-        const py = parseInt(args[1] || '8', 10)
-        const members = nfaStore.partyMembers
+        const rawPx = parseInt(args[0] || '9', 10)
+        const rawPy = parseInt(args[1] || '8', 10)
         const map = currentMap.value
+        // Snap leader to nearest walkable tile
+        const [px, py] = findNearestWalkable(map, rawPx, rawPy)
+        const members = nfaStore.partyMembers
         const existing = sceneEntities.value.find(e => e.id === 'party_0')
 
         // Find a valid walkable position for each member's formation offset
@@ -231,19 +259,23 @@ export const useGameStore = defineStore('game', () => {
         if (existing) {
           sceneEntities.value = sceneEntities.value.map(e => {
             if (!e.id.startsWith('party_')) return e
-            const idx = parseInt(e.id.split('_')[1], 10)
+            const idx = parseInt(e.id.split('_')[1] ?? '0', 10)
             const [ox, oy] = PARTY_FORMATION[idx] ?? [0, 0]
             const [tx, ty] = idx === 0 ? [px, py] : resolvePos(ox, oy)
             return { ...e, targetX: tx, targetY: ty }
           })
         } else {
+          // Get NFA trait data for avatar rendering
+          const nfaParty = nfaStore.party
           const partyEntities: SceneEntity[] = members.map((m, i) => {
             const [ox, oy] = PARTY_FORMATION[i] ?? [0, 0]
             const [ex, ey] = i === 0 ? [px, py] : resolvePos(ox, oy)
+            const nfa = nfaParty[i]
             return {
               id: `party_${i}`,
               type: m.isCharacter ? 'player' : 'companion',
               x: ex, y: ey,
+              traits: nfa ? { race: nfa.traits.race, class_: nfa.traits.class_, personality: nfa.traits.personality, talentRarity: nfa.traits.talentRarity } : undefined,
             }
           })
           sceneEntities.value = [...sceneEntities.value, ...partyEntities]
@@ -394,8 +426,14 @@ export const useGameStore = defineStore('game', () => {
     addMessage('sys', `— Party formed: ${names} —`)
     addMessage('sys', '— Connecting to Dungeon Terminal... —')
 
-    // Set up WS message handler
+    // Set up WS message handler + close handler for auto-exit
     gameWS.setMessageHandler(handleServerMessage)
+    gameWS.setCloseHandler(() => {
+      // Server disconnected during gameplay — exit to menu
+      addMessage('sys', '— Server disconnected —')
+      nfaStore.clearParty()
+      retryGame()
+    })
 
     try {
       await gameWS.connect()
@@ -408,6 +446,7 @@ export const useGameStore = defineStore('game', () => {
       addMessage('gm', 'The passage opens into a vast underground chamber. Ancient pillars line the way forward.')
       addMessage('gm', 'What do you do?')
       // Place party in default position with walkable formation
+      const nfaPartyFallback = nfaStore.party
       sceneEntities.value = nfaStore.partyMembers.map((m, i) => {
         const [ox, oy] = PARTY_FORMATION[i] ?? [0, 0]
         let ex = 9 + ox, ey = 8 + oy
@@ -417,7 +456,11 @@ export const useGameStore = defineStore('game', () => {
             if (isWalkable(startRoom, 9 + fx, 8 + fy)) { ex = 9 + fx; ey = 8 + fy; break }
           }
         }
-        return { id: `party_${i}`, type: m.isCharacter ? 'player' : 'companion', x: ex, y: ey }
+        const nfa = nfaPartyFallback[i]
+        return {
+          id: `party_${i}`, type: m.isCharacter ? 'player' : 'companion', x: ex, y: ey,
+          traits: nfa ? { race: nfa.traits.race, class_: nfa.traits.class_, personality: nfa.traits.personality, talentRarity: nfa.traits.talentRarity } : undefined,
+        }
       })
     }
   }
@@ -469,6 +512,7 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function cleanup() {
+    gameWS.setCloseHandler(null)
     gameWS.disconnect()
   }
 

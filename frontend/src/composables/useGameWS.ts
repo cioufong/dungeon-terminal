@@ -23,6 +23,7 @@ export type ServerMessage =
 
 let ws: WebSocket | null = null
 let messageHandler: ((msg: ServerMessage) => void) | null = null
+let closeHandler: (() => void) | null = null
 
 const connected = ref(false)
 const streaming = ref(false)
@@ -48,6 +49,7 @@ export function useGameWS() {
         connected.value = false
         streaming.value = false
         ws = null
+        if (closeHandler) closeHandler()
       }
 
       ws.onerror = () => {
@@ -86,6 +88,10 @@ export function useGameWS() {
     messageHandler = handler
   }
 
+  function setCloseHandler(handler: (() => void) | null): void {
+    closeHandler = handler
+  }
+
   return {
     connected: readonly(connected),
     streaming: readonly(streaming),
@@ -94,5 +100,6 @@ export function useGameWS() {
     sendInit,
     sendCommand,
     setMessageHandler,
+    setCloseHandler,
   }
 }
