@@ -17,31 +17,51 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   // Read pre-upgrade state
   const V1Factory = await ethers.getContractFactory("DungeonNFA");
+  const V2Factory = await ethers.getContractFactory("DungeonNFAV2");
   const v1 = V1Factory.attach(proxyAddress);
   const ownerBefore = await (v1 as any).owner();
   const supplyBefore = await (v1 as any).totalSupply();
   console.log("  Owner:", ownerBefore);
   console.log("  Total supply:", supplyBefore.toString());
 
-  // Force import (in case this proxy wasn't deployed via this upgrades plugin instance)
+  // Check if V2 is already active (from a previous partial run)
+  let alreadyV2 = false;
   try {
-    await upgrades.forceImport(proxyAddress, V1Factory, { kind: "uups" });
-    console.log("  Proxy imported into manifest");
-  } catch {
-    console.log("  Proxy already in manifest");
+    const v2Check = V2Factory.attach(proxyAddress);
+    const ver = await (v2Check as any).version();
+    if (ver === "2.0.0") {
+      alreadyV2 = true;
+      console.log("\n  V2 already active on-chain (version:", ver, ")");
+    }
+  } catch { /* not V2 yet */ }
+
+  let implAddress: string;
+
+  if (alreadyV2) {
+    // V2 upgrade already applied on-chain — just update deployment records
+    implAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
+    console.log("  Existing V2 implementation:", implAddress);
+  } else {
+    // Force import (in case this proxy wasn't deployed via this upgrades plugin instance)
+    try {
+      await upgrades.forceImport(proxyAddress, V1Factory, { kind: "uups" });
+      console.log("  Proxy imported into manifest");
+    } catch {
+      console.log("  Proxy already in manifest");
+    }
+
+    // Upgrade to V2
+    console.log("\n  Deploying V2 implementation...");
+    await upgrades.upgradeProxy(proxyAddress, V2Factory, {
+      call: { fn: "initializeV2", args: [] },
+    });
+
+    implAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
+    console.log("  New implementation:", implAddress);
   }
 
-  // Upgrade to V2
-  console.log("\n  Deploying V2 implementation...");
-  const V2Factory = await ethers.getContractFactory("DungeonNFAV2");
-  const nfaV2 = await upgrades.upgradeProxy(proxyAddress, V2Factory, {
-    call: { fn: "initializeV2", args: [] },
-  });
-
-  const implAddress = await upgrades.erc1967.getImplementationAddress(proxyAddress);
-  console.log("  New implementation:", implAddress);
-
   // Verify
+  const nfaV2 = V2Factory.attach(proxyAddress);
   const ver = await (nfaV2 as any).version();
   const maxLog = await (nfaV2 as any).maxAdventureLog();
   const ownerAfter = await (nfaV2 as any).owner();
@@ -59,10 +79,15 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // Optionally set game server
   const gameServerAddress = process.env.GAME_SERVER_ADDRESS;
   if (gameServerAddress) {
-    console.log("\n  Setting game server:", gameServerAddress);
-    const tx = await (nfaV2 as any).setGameServer(gameServerAddress, true);
-    await tx.wait();
-    console.log("  Game server authorized");
+    const isAlready = await (nfaV2 as any).gameServers(gameServerAddress);
+    if (isAlready) {
+      console.log("\n  Game server already authorized:", gameServerAddress);
+    } else {
+      console.log("\n  Setting game server:", gameServerAddress);
+      const tx = await (nfaV2 as any).setGameServer(gameServerAddress, true);
+      await tx.wait();
+      console.log("  Game server authorized");
+    }
   } else {
     console.log("\n  Set GAME_SERVER_ADDRESS env to auto-authorize a game server");
   }
