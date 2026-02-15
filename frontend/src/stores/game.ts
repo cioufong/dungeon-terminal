@@ -7,6 +7,9 @@ import { useSound } from '../composables/useSound'
 import { getStageById, unlockStage } from '../data/stages'
 import { isWalkable, findNearestWalkable } from '../data/maps'
 
+// Cumulative XP thresholds per level (must match contract _xpThresholds)
+const XP_THRESHOLDS = [0, 100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500, 5500, 6600, 7800, 9100, 10500, 12000, 13600, 15300, 17100, 19000]
+
 export interface LogEntry {
   type: 'sys' | 'gm' | 'nfa' | 'player' | 'roll' | 'dmg'
   text: string
@@ -298,6 +301,8 @@ export const useGameStore = defineStore('game', () => {
 
   function triggerAutoEffects(msg: ServerMessage) {
     if (msg.type === 'dmg') {
+      // Remove existing flash to prevent red overlay stacking
+      activeEffects.value = activeEffects.value.filter(e => e.type !== 'damage_flash')
       addEffect('damage_flash', 0, 0, 300)
       addEffect('shake', 0, 0, 400)
       sound.damage()
@@ -326,6 +331,8 @@ export const useGameStore = defineStore('game', () => {
     if (msg.type === 'sys') {
       const text = (msg as { type: 'sys'; text: string }).text.toLowerCase()
       if (text.includes('combat')) {
+        // Remove any existing combat_tint to prevent red overlay stacking
+        activeEffects.value = activeEffects.value.filter(e => e.type !== 'combat_tint')
         addEffect('combat_tint', 0, 0, 2000)
         sound.attack()
       }
@@ -414,8 +421,17 @@ export const useGameStore = defineStore('game', () => {
     floorCleared.value = false
     victory.value = false
     currentFloor.value = floor
-    xp.value = 0
-    level.value = 1
+
+    // Load on-chain XP/level from the character NFA
+    const charNFA = nfaStore.selectedNFA
+    if (charNFA && charNFA.progression.level > 0) {
+      level.value = charNFA.progression.level
+      const prevThreshold = XP_THRESHOLDS[level.value - 1] ?? 0
+      xp.value = charNFA.progression.xp - prevThreshold
+    } else {
+      xp.value = 0
+      level.value = 1
+    }
 
     // Initialize HP from party members
     for (const m of nfaStore.partyMembers) {
@@ -499,6 +515,7 @@ export const useGameStore = defineStore('game', () => {
 
   function continueNextFloor() {
     floorCleared.value = false
+    activeEffects.value = []
     currentFloor.value++
     // Tell the AI GM to advance to next floor
     sendCommand(`[Advance to Floor ${currentFloor.value}]`)
@@ -508,6 +525,7 @@ export const useGameStore = defineStore('game', () => {
     gameOver.value = false
     floorCleared.value = false
     victory.value = false
+    activeEffects.value = []
     cleanup()
   }
 

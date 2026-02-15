@@ -185,8 +185,11 @@ function onEnterGame() {
   showStageSelect.value = true
 }
 
-function onStageSelect(stageId: number) {
+async function onStageSelect(stageId: number) {
   showStageSelect.value = false
+  // Re-fetch NFAs from chain to get latest XP/level before starting
+  await loadMyNFAs()
+  nfaStore.setOwnedNFAs(ownedNFAs.value)
   gameStore.startSession(stageId)
 }
 
