@@ -12,7 +12,7 @@ const DEPLOYER_PRIVATE_KEY =
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.28",
+    version: "0.8.33",
     settings: {
       viaIR: true,
       optimizer: {
