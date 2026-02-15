@@ -1,8 +1,10 @@
 import { Router } from 'express'
 import { verifyMessage } from 'viem'
 import { getAllSections, updateSection, resetAll } from './prompt-store.js'
+import { loadContractAddress } from './load-contract-address.js'
 
-const CONTRACT_ADDRESS = (process.env.NFA_CONTRACT_ADDRESS || '') as `0x${string}`
+const CONTRACT_ADDRESS = loadContractAddress() as `0x${string}`
+console.log(`[Admin] Contract address: ${CONTRACT_ADDRESS || '(not configured)'}`)
 
 // Minimal ABI — only need owner() view function
 const ownerAbi = [{
@@ -18,6 +20,10 @@ let ownerCacheTime = 0
 const OWNER_CACHE_TTL = 60_000 // 1 minute
 
 async function getContractOwner(): Promise<string> {
+  if (!CONTRACT_ADDRESS || CONTRACT_ADDRESS.length < 42) {
+    throw new Error('NFA_CONTRACT_ADDRESS not configured')
+  }
+
   const now = Date.now()
   if (cachedOwner && now - ownerCacheTime < OWNER_CACHE_TTL) {
     return cachedOwner
@@ -73,8 +79,13 @@ async function verifyAdmin(req: { headers: Record<string, string | string[] | un
   }
 
   // Verify address is contract owner
-  const owner = await getContractOwner()
-  return addr.toLowerCase() === owner
+  try {
+    const owner = await getContractOwner()
+    return addr.toLowerCase() === owner
+  } catch {
+    console.warn('[Admin] Cannot verify owner — contract address not configured')
+    return false
+  }
 }
 
 export function createAdminRouter(): Router {

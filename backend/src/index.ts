@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws'
 import { handleConnection } from './ws.js'
 import { initBlockchain } from './blockchain.js'
 import { createAdminRouter } from './admin-api.js'
+import { loadContractAddress } from './load-contract-address.js'
 
 // Ensure prompt defaults are registered before anything uses them
 import './prompts.js'
@@ -22,6 +23,12 @@ app.use((_req, res, next) => {
     return
   }
   next()
+})
+
+// Public config (contract address from deployments)
+const contractAddress = loadContractAddress()
+app.get('/api/config', (_req, res) => {
+  res.json({ contractAddress })
 })
 
 // Health check

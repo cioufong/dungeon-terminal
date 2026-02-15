@@ -2,6 +2,7 @@ import { createPublicClient, createWalletClient, http } from 'viem'
 import type { PublicClient, WalletClient } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { bscTestnet } from 'viem/chains'
+import { loadContractAddress } from './load-contract-address.js'
 
 const grantXPAbi = [{
   type: 'function',
@@ -54,11 +55,11 @@ export function isBlockchainEnabled(): boolean {
 
 export function initBlockchain(): void {
   const privateKey = process.env.GAME_SERVER_PRIVATE_KEY
-  const address = process.env.NFA_CONTRACT_ADDRESS
+  const address = loadContractAddress()
   const rpcUrl = process.env.BSC_RPC_URL
 
   if (!privateKey || !address) {
-    console.warn('[Blockchain] Missing GAME_SERVER_PRIVATE_KEY or NFA_CONTRACT_ADDRESS — XP granting disabled')
+    console.warn('[Blockchain] Missing GAME_SERVER_PRIVATE_KEY or contract address — XP granting disabled')
     return
   }
 
