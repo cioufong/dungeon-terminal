@@ -47,6 +47,17 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
       "  Implementation:",
       result.implementation
     );
+
+    // Authorize game server if env var is set
+    const gameServerAddress = process.env.GAME_SERVER_ADDRESS;
+    if (gameServerAddress) {
+      console.log("\n  Setting game server:", gameServerAddress);
+      const DungeonNFA = await ethers.getContractAt("DungeonNFA", result.address);
+      const tx = await DungeonNFA.setGameServer(gameServerAddress, true);
+      await tx.wait();
+      console.log("  Game server authorized ✓");
+    }
+
     console.log("\nDone! Copy the proxy address to frontend/.env.local:");
     console.log(`  VITE_NFA_CONTRACT_ADDRESS=${result.address}`);
   } else {

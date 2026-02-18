@@ -89,9 +89,9 @@
       <TxStatus :tx="vrfTx" />
     </div>
 
-    <!-- V2: Game Server -->
-    <div v-if="admin.isV2.value" class="contract-section">
-      <h3 class="section-title">V2 — Game Server</h3>
+    <!-- Game Server -->
+    <div class="contract-section">
+      <h3 class="section-title">Game Server</h3>
       <div class="action-row">
         <input v-model="gameServerAddr" class="admin-input" placeholder="Server address" />
         <button class="admin-btn green-btn" @click="doSetGameServer(true)" :disabled="gameServerTx.status === 'pending'">

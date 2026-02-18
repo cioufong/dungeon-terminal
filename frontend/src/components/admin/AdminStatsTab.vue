@@ -69,9 +69,9 @@
         </div>
       </div>
 
-      <!-- V2 Stats -->
-      <div v-if="admin.isV2.value" class="stats-section">
-        <h3 class="section-title">V2 Config</h3>
+      <!-- Game Config -->
+      <div class="stats-section">
+        <h3 class="section-title">Game Config</h3>
         <div class="stat-row">
           <span class="stat-label">Max Adventure Log</span>
           <span class="stat-value">{{ store.contractState.maxAdventureLog }}</span>

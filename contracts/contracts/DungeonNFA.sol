@@ -24,8 +24,8 @@ interface VRFCoordinatorInterface {
 /**
  * @title DungeonNFA
  * @dev Non-Fungible Agent for Dungeon Terminal RPG
- *      Uses Binance Oracle VRF for provably fair trait generation
- *      BAP-578 compliant agent metadata
+ *      BAP-578 compliant agent metadata with game server role,
+ *      adventure logging, and optional VRF trait generation.
  */
 contract DungeonNFA is
     ERC721Upgradeable,
@@ -78,6 +78,21 @@ contract DungeonNFA is
         bool isFree;
     }
 
+    struct AdventureEntry {
+        uint16 floor;
+        uint8 result;       // 0=fled, 1=cleared, 2=defeated
+        uint16 xpEarned;
+        uint16 killCount;
+        uint64 timestamp;
+    }
+
+    struct GameStats {
+        uint16 highestFloor;
+        uint32 totalRuns;
+        uint32 totalKills;
+        uint64 lastActiveAt;
+    }
+
     // =============================================
     // CONSTANTS
     // =============================================
@@ -90,7 +105,7 @@ contract DungeonNFA is
     // STATE
     // =============================================
 
-    uint256 private _tokenIdCounter;
+    uint256 internal _tokenIdCounter;
     address public treasuryAddress;
     bool public paused;
 
@@ -106,20 +121,32 @@ contract DungeonNFA is
     bytes32 public vrfKeyHash;
     uint16 public vrfConfirmations;
     uint32 public vrfCallbackGasLimit;
-    mapping(uint256 => PendingMint) private _pendingMints;
+    mapping(uint256 => PendingMint) internal _pendingMints;
     mapping(address => bool) public hasPendingMint;
     uint256 public pendingMintCount;
 
     // NFA data
-    mapping(uint256 => NFATraits) private _traits;
+    mapping(uint256 => NFATraits) internal _traits;
     mapping(uint256 => NFAProgression) internal _progression;
     mapping(uint256 => AgentMetadata) internal _agentMeta;
 
     // XP thresholds per level (cumulative)
     uint32[20] internal _xpThresholds;
 
-    // Renderer for on-chain SVG tokenURI (added in upgrade)
+    // Renderer for on-chain SVG tokenURI
     INFARenderer public renderer;
+
+    // Game server role
+    mapping(address => bool) public gameServers;
+
+    // Adventure logs
+    uint8 public maxAdventureLog;
+    mapping(uint256 => AdventureEntry[]) internal _adventureLogs;
+    mapping(uint256 => uint256) public adventureLogIndex;
+    mapping(uint256 => GameStats) public gameStats;
+
+    // VRF toggle: when false, uses pseudo-random (no VRF cost)
+    bool public vrfEnabled;
 
     // =============================================
     // EVENTS
@@ -143,6 +170,9 @@ contract DungeonNFA is
     event ContractPaused(bool paused);
     event FreeMintGranted(address indexed user, uint256 amount);
     event RendererUpdated(address renderer);
+    event AdventureRecorded(uint256 indexed tokenId, uint16 floor, uint8 result);
+    event GameServerUpdated(address indexed server, bool authorized);
+    event VRFToggled(bool enabled);
 
     // =============================================
     // MODIFIERS
@@ -155,6 +185,11 @@ contract DungeonNFA is
 
     modifier onlyTokenOwner(uint256 tokenId) {
         require(ownerOf(tokenId) == msg.sender, "Not token owner");
+        _;
+    }
+
+    modifier onlyGameServer() {
+        require(gameServers[msg.sender], "Not authorized game server");
         _;
     }
 
@@ -192,6 +227,8 @@ contract DungeonNFA is
         vrfConfirmations = 3;
         vrfCallbackGasLimit = 300000;
 
+        maxAdventureLog = 10;
+
         // XP thresholds: level 1=0, level 2=100, level 3=300, ...
         _xpThresholds = [
             0, 100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500,
@@ -203,88 +240,93 @@ contract DungeonNFA is
     // FREE MINT (character creation, soulbound)
     // =============================================
 
-    /**
-     * @dev Create your character. Costs FREE_MINT_FEE (0.01 BNB).
-     *      One per wallet (soulbound, non-transferable).
-     *      Traits are determined by Binance Oracle VRF.
-     */
     function freeMint() external payable whenNotPaused nonReentrant {
         require(totalSupply() + pendingMintCount < MAX_SUPPLY, "Max supply reached");
         require(msg.value == FREE_MINT_FEE, "Incorrect fee");
         require(!hasPendingMint[msg.sender], "Pending mint exists");
 
         uint256 totalFree = freeMintsPerUser + bonusFreeMints[msg.sender];
-        require(
-            freeMintsClaimed[msg.sender] < totalFree,
-            "No free mints remaining"
-        );
-
-        // Consume free mint slot upfront
+        require(freeMintsClaimed[msg.sender] < totalFree, "No free mints remaining");
         freeMintsClaimed[msg.sender]++;
 
-        // Send fee to treasury
         (bool ok, ) = payable(treasuryAddress).call{value: msg.value}("");
         require(ok, "Treasury transfer failed");
 
-        // Request VRF randomness
-        uint256 requestId = vrfCoordinator.requestRandomWords(
-            vrfKeyHash,
-            vrfSubscriptionId,
-            vrfConfirmations,
-            vrfCallbackGasLimit,
-            1
-        );
-
-        _pendingMints[requestId] = PendingMint(msg.sender, true);
-        hasPendingMint[msg.sender] = true;
-        pendingMintCount++;
-
-        emit MintRequested(requestId, msg.sender, true);
+        if (vrfEnabled) {
+            uint256 requestId = vrfCoordinator.requestRandomWords(
+                vrfKeyHash, vrfSubscriptionId, vrfConfirmations, vrfCallbackGasLimit, 1
+            );
+            _pendingMints[requestId] = PendingMint(msg.sender, true);
+            hasPendingMint[msg.sender] = true;
+            pendingMintCount++;
+            emit MintRequested(requestId, msg.sender, true);
+        } else {
+            _instantMint(msg.sender, true);
+        }
     }
 
     // =============================================
     // PAID MINT (companion recruitment, tradeable)
     // =============================================
 
-    /**
-     * @dev Recruit an NFA companion. Costs MINT_FEE (0.05 BNB).
-     *      Companions are transferable and tradeable.
-     *      Traits are determined by Binance Oracle VRF.
-     */
     function paidMint() external payable whenNotPaused nonReentrant {
         require(totalSupply() + pendingMintCount < MAX_SUPPLY, "Max supply reached");
         require(msg.value == MINT_FEE, "Incorrect fee");
         require(!hasPendingMint[msg.sender], "Pending mint exists");
 
-        // Send fee to treasury
         (bool ok, ) = payable(treasuryAddress).call{value: msg.value}("");
         require(ok, "Treasury transfer failed");
 
-        // Request VRF randomness
-        uint256 requestId = vrfCoordinator.requestRandomWords(
-            vrfKeyHash,
-            vrfSubscriptionId,
-            vrfConfirmations,
-            vrfCallbackGasLimit,
-            1
+        if (vrfEnabled) {
+            uint256 requestId = vrfCoordinator.requestRandomWords(
+                vrfKeyHash, vrfSubscriptionId, vrfConfirmations, vrfCallbackGasLimit, 1
+            );
+            _pendingMints[requestId] = PendingMint(msg.sender, false);
+            hasPendingMint[msg.sender] = true;
+            pendingMintCount++;
+            emit MintRequested(requestId, msg.sender, false);
+        } else {
+            _instantMint(msg.sender, false);
+        }
+    }
+
+    // =============================================
+    // INSTANT MINT (pseudo-random, no VRF cost)
+    // =============================================
+
+    function _instantMint(address minter, bool isFree) internal {
+        uint256 seed = uint256(keccak256(abi.encodePacked(
+            block.prevrandao, block.timestamp, minter, _tokenIdCounter
+        )));
+
+        NFATraits memory traits = _deriveTraits(seed);
+        uint256 tokenId = ++_tokenIdCounter;
+
+        if (isFree) {
+            isFreeMint[tokenId] = true;
+        }
+
+        _mint(minter, tokenId);
+
+        _traits[tokenId] = traits;
+        _progression[tokenId] = NFAProgression({
+            level: 1,
+            xp: 0,
+            active: true,
+            createdAt: block.timestamp
+        });
+
+        emit NFAMinted(
+            tokenId, minter,
+            traits.race, traits.class_, traits.personality,
+            traits.talentId, traits.talentRarity, traits.baseStats
         );
-
-        _pendingMints[requestId] = PendingMint(msg.sender, false);
-        hasPendingMint[msg.sender] = true;
-        pendingMintCount++;
-
-        emit MintRequested(requestId, msg.sender, false);
     }
 
     // =============================================
     // VRF CALLBACK
     // =============================================
 
-    /**
-     * @dev Called by the Binance Oracle VRF Coordinator when randomness is ready.
-     *      We implement this directly (not via VRFConsumerBase) because
-     *      VRFConsumerBase uses constructor/immutable which conflicts with UUPS proxy.
-     */
     function rawFulfillRandomWords(
         uint256 requestId,
         uint256[] memory randomWords
@@ -302,7 +344,6 @@ contract DungeonNFA is
             isFreeMint[tokenId] = true;
         }
 
-        // Use _mint (not _safeMint) to avoid callback failures in VRF context
         _mint(pending.minter, tokenId);
 
         _traits[tokenId] = traits;
@@ -345,7 +386,6 @@ contract DungeonNFA is
         t.personality = Personality(seed % 8);
         seed = seed >> 8;
 
-        // Talent rarity: Common 60%, Rare 25%, Epic 10%, Legendary 4%, Mythic 1%
         uint256 rarityRoll = seed % 100;
         seed = seed >> 8;
         if (rarityRoll < 60) t.talentRarity = TalentRarity.Common;
@@ -354,11 +394,9 @@ contract DungeonNFA is
         else if (rarityRoll < 99) t.talentRarity = TalentRarity.Legendary;
         else t.talentRarity = TalentRarity.Mythic;
 
-        // Talent ID (0-29, 30 different talents)
         t.talentId = uint8(seed % 30);
         seed = seed >> 8;
 
-        // Base stats: 8-18 range (11 values)
         for (uint256 i = 0; i < 6; i++) {
             t.baseStats[i] = uint8(8 + (seed % 11));
             seed = seed >> 8;
@@ -368,30 +406,75 @@ contract DungeonNFA is
     }
 
     // =============================================
-    // GAMEPLAY
+    // GAME SERVER FUNCTIONS
     // =============================================
 
-    /**
-     * @dev Grant XP to an NFA. MVP: only owner (game server wallet).
-     */
-    function grantXP(uint256 tokenId, uint32 amount) external virtual onlyOwner {
+    function grantXP(uint256 tokenId, uint32 amount) external onlyGameServer {
         require(_ownerOf(tokenId) != address(0), "Token does not exist");
         NFAProgression storage prog = _progression[tokenId];
         require(prog.active, "NFA inactive");
 
         prog.xp += amount;
 
-        // Auto level-up
         while (prog.level < 20 && prog.xp >= _xpThresholds[prog.level]) {
             prog.level++;
         }
 
+        gameStats[tokenId].lastActiveAt = uint64(block.timestamp);
+
         emit XPGained(tokenId, amount, prog.level);
     }
 
-    /**
-     * @dev Update BAP-578 agent metadata (token owner only).
-     */
+    function recordAdventure(
+        uint256 tokenId,
+        uint16 floor,
+        uint8 result,
+        uint16 xpEarned,
+        uint16 killCount
+    ) external onlyGameServer {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        require(result <= 2, "Invalid result");
+        _recordAdventure(tokenId, floor, result, xpEarned, killCount);
+    }
+
+    function recordAdventureBatch(
+        uint256[] calldata tokenIds,
+        uint16 floor,
+        uint8 result,
+        uint16 xpEarned,
+        uint16 killCount
+    ) external onlyGameServer {
+        require(result <= 2, "Invalid result");
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            require(_ownerOf(tokenIds[i]) != address(0), "Token does not exist");
+            _recordAdventure(tokenIds[i], floor, result, xpEarned, killCount);
+        }
+    }
+
+    function updateVault(
+        uint256 tokenId,
+        string calldata vaultURI,
+        bytes32 vaultHash
+    ) external onlyGameServer {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        _agentMeta[tokenId].vaultURI = vaultURI;
+        _agentMeta[tokenId].vaultHash = vaultHash;
+        emit MetadataUpdated(tokenId);
+    }
+
+    function updateExperience(
+        uint256 tokenId,
+        string calldata experience
+    ) external onlyGameServer {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        _agentMeta[tokenId].experience = experience;
+        emit MetadataUpdated(tokenId);
+    }
+
+    // =============================================
+    // GAMEPLAY (token owner)
+    // =============================================
+
     function updateAgentMetadata(
         uint256 tokenId,
         AgentMetadata calldata metadata
@@ -400,12 +483,47 @@ contract DungeonNFA is
         emit MetadataUpdated(tokenId);
     }
 
-    /**
-     * @dev Set NFA active/inactive.
-     */
     function setNFAStatus(uint256 tokenId, bool active) external onlyTokenOwner(tokenId) {
         _progression[tokenId].active = active;
         emit StatusChanged(tokenId, active);
+    }
+
+    // =============================================
+    // INTERNAL
+    // =============================================
+
+    function _recordAdventure(
+        uint256 tokenId,
+        uint16 floor,
+        uint8 result,
+        uint16 xpEarned,
+        uint16 killCount
+    ) internal {
+        AdventureEntry memory entry = AdventureEntry({
+            floor: floor,
+            result: result,
+            xpEarned: xpEarned,
+            killCount: killCount,
+            timestamp: uint64(block.timestamp)
+        });
+
+        uint256 idx = adventureLogIndex[tokenId];
+        if (_adventureLogs[tokenId].length < maxAdventureLog) {
+            _adventureLogs[tokenId].push(entry);
+        } else {
+            _adventureLogs[tokenId][idx % maxAdventureLog] = entry;
+        }
+        adventureLogIndex[tokenId] = idx + 1;
+
+        GameStats storage gs = gameStats[tokenId];
+        gs.totalRuns++;
+        gs.totalKills += uint32(killCount);
+        if (floor > gs.highestFloor) {
+            gs.highestFloor = floor;
+        }
+        gs.lastActiveAt = uint64(block.timestamp);
+
+        emit AdventureRecorded(tokenId, floor, result);
     }
 
     // =============================================
@@ -441,6 +559,36 @@ contract DungeonNFA is
         return _progression[tokenId];
     }
 
+    function getGameStats(uint256 tokenId) external view returns (GameStats memory) {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        return gameStats[tokenId];
+    }
+
+    function getAdventureLog(uint256 tokenId) external view returns (AdventureEntry[] memory) {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+
+        AdventureEntry[] storage logs = _adventureLogs[tokenId];
+        uint256 len = logs.length;
+        if (len == 0) return new AdventureEntry[](0);
+
+        uint256 idx = adventureLogIndex[tokenId];
+
+        if (idx <= len) {
+            AdventureEntry[] memory result = new AdventureEntry[](len);
+            for (uint256 i = 0; i < len; i++) {
+                result[i] = logs[i];
+            }
+            return result;
+        }
+
+        AdventureEntry[] memory sorted = new AdventureEntry[](len);
+        uint256 start = idx % len;
+        for (uint256 i = 0; i < len; i++) {
+            sorted[i] = logs[(start + i) % len];
+        }
+        return sorted;
+    }
+
     function tokensOfOwner(address account) external view returns (uint256[] memory) {
         uint256 count = balanceOf(account);
         uint256[] memory tokens = new uint256[](count);
@@ -454,6 +602,10 @@ contract DungeonNFA is
         uint256 total = freeMintsPerUser + bonusFreeMints[user];
         uint256 claimed = freeMintsClaimed[user];
         return claimed >= total ? 0 : total - claimed;
+    }
+
+    function version() external pure returns (string memory) {
+        return "2.0.0";
     }
 
     // =============================================
@@ -500,6 +652,22 @@ contract DungeonNFA is
         vrfCallbackGasLimit = _vrfCallbackGasLimit;
     }
 
+    function setVRFEnabled(bool enabled) external onlyOwner {
+        vrfEnabled = enabled;
+        emit VRFToggled(enabled);
+    }
+
+    function setGameServer(address server, bool authorized) external onlyOwner {
+        require(server != address(0), "Invalid server address");
+        gameServers[server] = authorized;
+        emit GameServerUpdated(server, authorized);
+    }
+
+    function setMaxAdventureLog(uint8 maxLog) external onlyOwner {
+        require(maxLog > 0, "Max log must be > 0");
+        maxAdventureLog = maxLog;
+    }
+
     function emergencyWithdraw() external onlyOwner {
         uint256 bal = address(this).balance;
         require(bal > 0, "No balance");
@@ -517,7 +685,6 @@ contract DungeonNFA is
         returns (address)
     {
         address from = _ownerOf(tokenId);
-        // Soulbound: free minted tokens cannot be transferred (except mint/burn)
         if (isFreeMint[tokenId]) {
             require(
                 from == address(0) || to == address(0),
@@ -542,7 +709,6 @@ contract DungeonNFA is
     {
         require(_ownerOf(tokenId) != address(0), "Token does not exist");
 
-        // If renderer is set, generate dynamic on-chain metadata
         if (address(renderer) != address(0)) {
             NFATraits memory t = _traits[tokenId];
             NFAProgression memory p = _progression[tokenId];
@@ -558,7 +724,6 @@ contract DungeonNFA is
             );
         }
 
-        // Fallback to stored URI
         return super.tokenURI(tokenId);
     }
 

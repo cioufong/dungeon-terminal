@@ -1,29 +1,22 @@
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { Contract } from 'ethers'
 import { useWeb3 } from './useWeb3'
-import V1_ABI from '../abi/DungeonNFA.json'
-import V2_ABI from '../abi/DungeonNFAV2.json'
+import ABI from '../abi/DungeonNFA.json'
 import { getContractAddress } from '../config'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 const isOwner = ref(false)
-const isV2 = ref(false)
 const checking = ref(false)
-
-// Merge V1 + V2 ABIs so both old and new function names work
-const MERGED_ABI = [...V1_ABI, ...V2_ABI.filter((e: any) =>
-  !V1_ABI.some((v: any) => v.name === e.name && v.type === e.type)
-)]
 
 function getContract(): Contract {
   const { signer } = useWeb3()
-  return new Contract(getContractAddress(), MERGED_ABI, signer.value!)
+  return new Contract(getContractAddress(), ABI, signer.value!)
 }
 
 function getReadContract(): Contract {
   const { provider } = useWeb3()
-  return new Contract(getContractAddress(), MERGED_ABI, provider.value!)
+  return new Contract(getContractAddress(), ABI, provider.value!)
 }
 
 /** Check if connected wallet is contract owner */
@@ -38,15 +31,6 @@ async function checkOwner(): Promise<boolean> {
     const contract = getReadContract()
     const owner: string = await contract.getFunction('owner')()
     isOwner.value = owner.toLowerCase() === addr.value.toLowerCase()
-
-    // Check V2
-    try {
-      await contract.getFunction('version')()
-      isV2.value = true
-    } catch {
-      isV2.value = false
-    }
-
     return isOwner.value
   } catch (e) {
     console.error('[Admin] checkOwner failed:', e)
@@ -159,32 +143,19 @@ async function tryCall(contract: Contract, ...names: string[]): Promise<unknown>
 async function readContractState() {
   const contract = getReadContract()
 
-  // These exist on both V1 and V2
   const [owner, paused, freeMintsPerUser] = await Promise.all([
     contract.getFunction('owner')(),
     contract.getFunction('paused')(),
     contract.getFunction('freeMintsPerUser')(),
   ])
 
-  // These have different names across versions
-  const [treasury, totalSupply, renderer] = await Promise.all([
+  const [treasury, totalSupply, renderer, version, maxAdventureLog] = await Promise.all([
     tryCall(contract, 'treasury', 'treasuryAddress'),
     tryCall(contract, 'getTotalSupply', 'totalSupply'),
     tryCall(contract, 'renderer').catch(() => null),
+    contract.getFunction('version')(),
+    contract.getFunction('maxAdventureLog')(),
   ])
-
-  let version = '1.0.0'
-  let maxAdventureLog = 0
-  if (isV2.value) {
-    try {
-      const [v, mal] = await Promise.all([
-        contract.getFunction('version')(),
-        contract.getFunction('maxAdventureLog')(),
-      ])
-      version = v
-      maxAdventureLog = Number(mal)
-    } catch { /* V1 fallback */ }
-  }
 
   return {
     owner: owner as string,
@@ -193,8 +164,8 @@ async function readContractState() {
     totalSupply: Number(totalSupply ?? 0),
     freeMintsPerUser: Number(freeMintsPerUser),
     renderer: (renderer as string) || '',
-    version,
-    maxAdventureLog,
+    version: version as string,
+    maxAdventureLog: Number(maxAdventureLog),
   }
 }
 
@@ -218,36 +189,29 @@ async function readVRFConfig() {
 
 async function queryToken(tokenId: number) {
   const contract = getReadContract()
-  const [traits, progression, ownerAddr, isFree] = await Promise.all([
+  const [traits, progression, ownerAddr, isFree, gameStatsRaw, adventureLogRaw] = await Promise.all([
     contract.getFunction('getTraits')(tokenId),
     contract.getFunction('getProgression')(tokenId),
     contract.getFunction('ownerOf')(tokenId),
     contract.getFunction('isFreeMint')(tokenId),
+    contract.getFunction('getGameStats')(tokenId),
+    contract.getFunction('getAdventureLog')(tokenId),
   ])
 
-  let gameStats = null
-  let adventureLog: unknown[] = []
-  if (isV2.value) {
-    try {
-      const [gs, al] = await Promise.all([
-        contract.getFunction('getGameStats')(tokenId),
-        contract.getFunction('getAdventureLog')(tokenId),
-      ])
-      gameStats = {
-        highestFloor: Number(gs.highestFloor),
-        totalRuns: Number(gs.totalRuns),
-        totalKills: Number(gs.totalKills),
-        lastActiveAt: Number(gs.lastActiveAt),
-      }
-      adventureLog = Array.from(al).map((e: any) => ({
-        floor: Number(e.floor),
-        result: Number(e.result),
-        xpEarned: Number(e.xpEarned),
-        killCount: Number(e.killCount),
-        timestamp: Number(e.timestamp),
-      }))
-    } catch { /* V1 fallback */ }
+  const gameStats = {
+    highestFloor: Number(gameStatsRaw.highestFloor),
+    totalRuns: Number(gameStatsRaw.totalRuns),
+    totalKills: Number(gameStatsRaw.totalKills),
+    lastActiveAt: Number(gameStatsRaw.lastActiveAt),
   }
+
+  const adventureLog = Array.from(adventureLogRaw).map((e: any) => ({
+    floor: Number(e.floor),
+    result: Number(e.result),
+    xpEarned: Number(e.xpEarned),
+    killCount: Number(e.killCount),
+    timestamp: Number(e.timestamp),
+  }))
 
   return {
     traits: {
@@ -333,13 +297,11 @@ async function checkGameServer(addr: string): Promise<boolean> {
 
 function resetAdmin() {
   isOwner.value = false
-  isV2.value = false
 }
 
 export function useAdmin() {
   return {
     isOwner,
-    isV2,
     checking,
     checkOwner,
     resetAdmin,
