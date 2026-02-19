@@ -35,6 +35,28 @@
     <!-- Minting -->
     <div class="contract-section">
       <h3 class="section-title">Minting</h3>
+
+      <!-- Mint Fees -->
+      <div class="current-val">Free mint fee: {{ formatFee(store.contractState.freeMintFee) }} BNB</div>
+      <div class="action-row">
+        <input v-model="freeMintFeeInput" type="text" class="admin-input small" placeholder="BNB" />
+        <button class="admin-btn" @click="doSetFreeMintFee" :disabled="freeMintFeeTx.status === 'pending'">
+          SET FREE FEE
+        </button>
+      </div>
+      <TxStatus :tx="freeMintFeeTx" />
+
+      <div class="subsection-divider" />
+      <div class="current-val">Paid mint fee: {{ formatFee(store.contractState.paidMintFee) }} BNB</div>
+      <div class="action-row">
+        <input v-model="paidMintFeeInput" type="text" class="admin-input small" placeholder="BNB" />
+        <button class="admin-btn" @click="doSetPaidMintFee" :disabled="paidMintFeeTx.status === 'pending'">
+          SET PAID FEE
+        </button>
+      </div>
+      <TxStatus :tx="paidMintFeeTx" />
+
+      <div class="subsection-divider" />
       <div class="current-val">Free mints per user: {{ store.contractState.freeMintsPerUser }}</div>
       <div class="action-row">
         <input v-model.number="freeMintsCount" type="number" class="admin-input small" placeholder="Count" min="0" />
@@ -151,6 +173,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { formatEther, parseEther } from 'ethers'
 import { useAdminStore } from '../../stores/admin'
 import { useAdmin, type TxState as TxStateType } from '../../composables/useAdmin'
 import { useI18n } from '../../i18n'
@@ -163,6 +186,8 @@ const { t } = useI18n()
 // TX states
 const pauseTx = reactive(admin.createTxState())
 const treasuryTx = reactive(admin.createTxState())
+const freeMintFeeTx = reactive(admin.createTxState())
+const paidMintFeeTx = reactive(admin.createTxState())
 const freeMintsTx = reactive(admin.createTxState())
 const grantMintsTx = reactive(admin.createTxState())
 const rendererTx = reactive(admin.createTxState())
@@ -173,6 +198,8 @@ const withdrawTx = reactive(admin.createTxState())
 
 // Form values
 const treasuryAddr = ref('')
+const freeMintFeeInput = ref('0')
+const paidMintFeeInput = ref('0.05')
 const freeMintsCount = ref(3)
 const grantAddr = ref('')
 const grantAmount = ref(1)
@@ -207,6 +234,21 @@ async function togglePause() {
 async function doSetTreasury() {
   if (!treasuryAddr.value) return
   const ok = await admin.setTreasury(treasuryTx, treasuryAddr.value)
+  if (ok) store.loadContractState()
+}
+
+function formatFee(fee: bigint | null): string {
+  if (fee == null) return '—'
+  return formatEther(fee)
+}
+
+async function doSetFreeMintFee() {
+  const ok = await admin.setFreeMintFee(freeMintFeeTx, parseEther(freeMintFeeInput.value))
+  if (ok) store.loadContractState()
+}
+
+async function doSetPaidMintFee() {
+  const ok = await admin.setPaidMintFee(paidMintFeeTx, parseEther(paidMintFeeInput.value))
   if (ok) store.loadContractState()
 }
 

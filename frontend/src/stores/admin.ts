@@ -15,6 +15,8 @@ export const useAdminStore = defineStore('admin', () => {
     renderer: '',
     version: '1.0.0',
     maxAdventureLog: 0,
+    freeMintFee: null as bigint | null,
+    paidMintFee: null as bigint | null,
   })
 
   const vrfConfig = reactive({

@@ -1,11 +1,14 @@
 import { ref } from 'vue'
-import { Contract } from 'ethers'
+import { Contract, parseEther } from 'ethers'
 import { useWeb3 } from './useWeb3'
 import ABI from '../abi/DungeonNFA.json'
 import { getContractAddress } from '../config'
 
-const freeMintFee = ref<bigint>(0n)
-const paidMintFee = ref<bigint>(0n)
+const DEFAULT_FREE_FEE = parseEther('0.01')
+const DEFAULT_PAID_FEE = parseEther('0.05')
+
+const freeMintFee = ref<bigint>(DEFAULT_FREE_FEE)
+const paidMintFee = ref<bigint>(DEFAULT_PAID_FEE)
 
 export type MintingState =
   | 'idle'
@@ -49,8 +52,14 @@ async function loadMintFees() {
   const { signer } = useWeb3()
   if (!signer.value) return
   const contract = getContract(signer.value)
-  freeMintFee.value = await contract.getFunction('freeMintFee')()
-  paidMintFee.value = await contract.getFunction('paidMintFee')()
+  try {
+    freeMintFee.value = await contract.getFunction('freeMintFee')()
+    paidMintFee.value = await contract.getFunction('paidMintFee')()
+  } catch {
+    // Fallback for old contracts with constant fees
+    freeMintFee.value = DEFAULT_FREE_FEE
+    paidMintFee.value = DEFAULT_PAID_FEE
+  }
 }
 
 async function loadFreeMints() {

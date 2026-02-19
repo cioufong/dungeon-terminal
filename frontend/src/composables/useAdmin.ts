@@ -149,12 +149,14 @@ async function readContractState() {
     contract.getFunction('freeMintsPerUser')(),
   ])
 
-  const [treasury, totalSupply, renderer, version, maxAdventureLog] = await Promise.all([
+  const [treasury, totalSupply, renderer, version, maxAdventureLog, freeMintFee, paidMintFee] = await Promise.all([
     tryCall(contract, 'treasury', 'treasuryAddress'),
     tryCall(contract, 'getTotalSupply', 'totalSupply'),
     tryCall(contract, 'renderer').catch(() => null),
     contract.getFunction('version')(),
     contract.getFunction('maxAdventureLog')(),
+    tryCall(contract, 'freeMintFee'),
+    tryCall(contract, 'paidMintFee'),
   ])
 
   return {
@@ -166,6 +168,8 @@ async function readContractState() {
     renderer: (renderer as string) || '',
     version: version as string,
     maxAdventureLog: Number(maxAdventureLog),
+    freeMintFee: freeMintFee as bigint | null,
+    paidMintFee: paidMintFee as bigint | null,
   }
 }
 
@@ -247,6 +251,16 @@ async function setTreasury(state: TxState, addr: string) {
   return execTx(state, () => contract.getFunction('setTreasury')(addr))
 }
 
+async function setFreeMintFee(state: TxState, fee: bigint) {
+  const contract = getContract()
+  return execTx(state, () => contract.getFunction('setFreeMintFee')(fee))
+}
+
+async function setPaidMintFee(state: TxState, fee: bigint) {
+  const contract = getContract()
+  return execTx(state, () => contract.getFunction('setPaidMintFee')(fee))
+}
+
 async function setFreeMintsPerUser(state: TxState, count: number) {
   const contract = getContract()
   return execTx(state, () => contract.getFunction('setFreeMintsPerUser')(count))
@@ -316,6 +330,8 @@ export function useAdmin() {
     // Contract writes
     setPaused,
     setTreasury,
+    setFreeMintFee,
+    setPaidMintFee,
     setFreeMintsPerUser,
     grantAdditionalFreeMints,
     setRenderer,
