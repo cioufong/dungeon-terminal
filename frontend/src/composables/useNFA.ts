@@ -96,9 +96,9 @@ async function waitForVRF(contract: Contract, addr: string): Promise<void> {
   const MAX_POLLS = 100 // ~5 minutes
 
   for (let i = 0; i < MAX_POLLS; i++) {
-    await new Promise(r => setTimeout(r, POLL_INTERVAL))
     const pending: boolean = await contract.getFunction('hasPendingMint')(addr)
-    if (!pending) return
+    if (!pending) return // instant mint (vrfEnabled=false) returns immediately
+    await new Promise(r => setTimeout(r, POLL_INTERVAL))
   }
   throw new Error('VRF fulfillment timeout')
 }

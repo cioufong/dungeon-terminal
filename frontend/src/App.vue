@@ -216,20 +216,24 @@ function confirmDisconnect() {
   disconnect()
 }
 
-function confirmExit() {
+async function confirmExit() {
   showExitConfirm.value = false
   gameStore.retryGame()
   nfaStore.clearParty()
   showRecruit.value = false
+  await loadMyNFAs()
+  nfaStore.setOwnedNFAs(ownedNFAs.value)
 }
 
 function onNextFloor() {
   gameStore.continueNextFloor()
 }
 
-function onRetry() {
+async function onRetry() {
   gameStore.retryGame()
   nfaStore.clearParty()
+  await loadMyNFAs()
+  nfaStore.setOwnedNFAs(ownedNFAs.value)
 }
 </script>
 
