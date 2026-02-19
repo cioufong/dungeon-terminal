@@ -1,7 +1,9 @@
 import { createPublicClient, createWalletClient, http } from 'viem'
 import type { PublicClient, WalletClient } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { bscTestnet } from 'viem/chains'
+import { bsc, bscTestnet } from 'viem/chains'
+
+const chain = process.env.BSC_NETWORK === 'bscTestnet' ? bscTestnet : bsc
 import { loadContractAddress } from './load-contract-address.js'
 
 const grantXPAbi = [{
@@ -80,12 +82,12 @@ export function initBlockchain(): void {
   const transport = http(rpcUrl || 'https://data-seed-prebsc-1-s1.bnbchain.org:8545')
 
   publicClient = createPublicClient({
-    chain: bscTestnet,
+    chain,
     transport,
   })
 
   walletClient = createWalletClient({
-    chain: bscTestnet,
+    chain,
     account,
     transport,
   })
@@ -101,7 +103,7 @@ export async function grantXP(tokenId: number, amount: number): Promise<void> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const hash = await walletClient.writeContract({
-        chain: bscTestnet,
+        chain,
         account: account!,
         address: contractAddress,
         abi: grantXPAbi,
@@ -142,7 +144,7 @@ export async function recordAdventure(
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const hash = await walletClient.writeContract({
-        chain: bscTestnet,
+        chain,
         account: account!,
         address: contractAddress,
         abi: recordAdventureAbi,
@@ -175,7 +177,7 @@ export async function updateVault(
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const hash = await walletClient.writeContract({
-        chain: bscTestnet,
+        chain,
         account: account!,
         address: contractAddress,
         abi: updateVaultAbi,
@@ -207,7 +209,7 @@ export async function updateExperience(
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const hash = await walletClient.writeContract({
-        chain: bscTestnet,
+        chain,
         account: account!,
         address: contractAddress,
         abi: updateExperienceAbi,

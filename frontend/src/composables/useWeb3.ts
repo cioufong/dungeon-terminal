@@ -1,15 +1,25 @@
 import { ref, computed, markRaw } from 'vue'
 import { BrowserProvider, JsonRpcSigner } from 'ethers'
 
-const BSC_TESTNET = {
-  chainId: '0x61', // 97
-  chainName: 'BNB Smart Chain Testnet',
-  nativeCurrency: { name: 'tBNB', symbol: 'tBNB', decimals: 18 },
-  rpcUrls: ['https://data-seed-prebsc-1-s1.binance.org:8545/'],
-  blockExplorerUrls: ['https://testnet.bscscan.com'],
+const CHAIN_CONFIGS: Record<number, { chainId: string; chainName: string; nativeCurrency: { name: string; symbol: string; decimals: number }; rpcUrls: string[]; blockExplorerUrls: string[] }> = {
+  56: {
+    chainId: '0x38',
+    chainName: 'BNB Smart Chain',
+    nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+    rpcUrls: ['https://bsc-dataseed1.binance.org/'],
+    blockExplorerUrls: ['https://bscscan.com'],
+  },
+  97: {
+    chainId: '0x61',
+    chainName: 'BNB Smart Chain Testnet',
+    nativeCurrency: { name: 'tBNB', symbol: 'tBNB', decimals: 18 },
+    rpcUrls: ['https://data-seed-prebsc-1-s1.binance.org:8545/'],
+    blockExplorerUrls: ['https://testnet.bscscan.com'],
+  },
 }
 
-const EXPECTED_CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || 97)
+const EXPECTED_CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || 56)
+const TARGET_CHAIN = CHAIN_CONFIGS[EXPECTED_CHAIN_ID] || CHAIN_CONFIGS[56]!
 
 const provider = ref<BrowserProvider | null>(null)
 const signer = ref<JsonRpcSigner | null>(null)
@@ -66,21 +76,21 @@ function disconnect() {
   chainId.value = 0
 }
 
-async function switchToBscTestnet() {
+async function switchToCorrectChain() {
   const eth = getEthereum()
   if (!eth) return
 
   try {
     await eth.request({
       method: 'wallet_switchEthereumChain',
-      params: [{ chainId: BSC_TESTNET.chainId }],
+      params: [{ chainId: TARGET_CHAIN.chainId }],
     })
   } catch (err: any) {
     // Chain not added yet → add it
     if (err.code === 4902) {
       await eth.request({
         method: 'wallet_addEthereumChain',
-        params: [BSC_TESTNET],
+        params: [TARGET_CHAIN],
       })
     }
   }
@@ -115,7 +125,7 @@ export function useWeb3() {
     isConnecting,
     connect,
     disconnect,
-    switchToBscTestnet,
+    switchToCorrectChain,
     shortAddress,
   }
 }

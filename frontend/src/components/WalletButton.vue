@@ -5,7 +5,7 @@
       {{ isConnecting ? t.connecting : t.connectWallet }}
     </button>
     <template v-else>
-      <span v-if="!isCorrectChain" class="chain-warn" @click="switchToBscTestnet">
+      <span v-if="!isCorrectChain" class="chain-warn" @click="switchToCorrectChain">
         {{ t.wrongChain }}
       </span>
       <span v-else class="wallet-addr" @click="showConfirm = true">
@@ -32,7 +32,7 @@ import { ref } from 'vue'
 import { useWeb3 } from '../composables/useWeb3'
 import { useI18n } from '../i18n'
 
-const { isConnected, isConnecting, isCorrectChain, address, connect, disconnect, switchToBscTestnet, shortAddress } = useWeb3()
+const { isConnected, isConnecting, isCorrectChain, address, connect, disconnect, switchToCorrectChain, shortAddress } = useWeb3()
 const { locale, t, toggleLocale } = useI18n()
 
 const showConfirm = ref(false)

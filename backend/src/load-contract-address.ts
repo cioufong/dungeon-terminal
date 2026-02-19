@@ -9,9 +9,10 @@ export function loadContractAddress(): string {
   // 1. Primary: auto-detect from contracts/deployments (works from both src/ and dist/)
   try {
     const __dirname = dirname(fileURLToPath(import.meta.url))
+    const network = process.env.BSC_NETWORK || 'bscMainnet'
     const candidates = [
-      resolve(__dirname, '../../contracts/deployments/bscTestnet/DungeonNFA_Proxy.json'),
-      resolve(__dirname, '../contracts/deployments/bscTestnet/DungeonNFA_Proxy.json'),
+      resolve(__dirname, `../../contracts/deployments/${network}/DungeonNFA_Proxy.json`),
+      resolve(__dirname, `../contracts/deployments/${network}/DungeonNFA_Proxy.json`),
     ]
     for (const proxyPath of candidates) {
       try {

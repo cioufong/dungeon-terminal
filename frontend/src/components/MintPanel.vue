@@ -22,7 +22,7 @@
           <p class="red">{{ t.wrongNetworkError }}</p>
           <p class="dim">{{ t.switchPrompt }}</p>
         </div>
-        <button class="mint-btn warn" @click="switchToBscTestnet">{{ t.switchNetwork }}</button>
+        <button class="mint-btn warn" @click="switchToCorrectChain">{{ t.switchNetwork }}</button>
       </template>
 
       <!-- ============ CHARACTER CREATION (free mint) ============ -->
@@ -132,7 +132,7 @@ import { STAT_NAMES, effectiveStats, talentName, rarityColor } from '../data/tra
 import { generateAvatarDataURI } from '../utils/avatarSVG'
 
 const { t } = useI18n()
-const { isConnected, isCorrectChain, connect, switchToBscTestnet } = useWeb3()
+const { isConnected, isCorrectChain, connect, switchToCorrectChain } = useWeb3()
 const {
   mintingState, mintError, lastMintedId, lastMintWasFree, ownedNFAs,
   freeMintFee, paidMintFee,
