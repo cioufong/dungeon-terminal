@@ -14,7 +14,7 @@ export default {
   // Character creation (free mint with VRF)
   welcomeNew: '> Welcome, Adventurer. Your journey begins here.',
   createCharDesc: '> Create your character to enter the dungeon. The Oracle will forge your traits by fate.',
-  createCharFee: '> Registration fee: 0.01 BNB — one per wallet, bound to your soul.',
+  createCharFee: (fee: string) => `> Registration fee: ${fee} BNB — one per wallet, bound to your soul.`,
   createCharBtn: 'CREATE CHARACTER',
   requestingChar: '> Submitting your request to the Oracle...',
   confirmTx: '> Confirm transaction in wallet.',
@@ -31,7 +31,7 @@ export default {
 
   // Companion recruitment (paid mint with VRF)
   welcomeBack: '> Ready to recruit a companion for your party.',
-  paidFee: '> Recruitment fee: 0.05 BNB',
+  paidFee: (fee: string) => `> Recruitment fee: ${fee} BNB`,
   companionDesc: '> Companions are tradeable NFA agents that fight alongside you.',
   beginRecruitment: 'BEGIN RECRUITMENT',
   requestingRecruit: '> Sending recruitment request to the Oracle...',

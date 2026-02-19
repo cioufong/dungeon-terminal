@@ -30,7 +30,7 @@
         <div class="term-block">
           <p>{{ t.welcomeNew }}</p>
           <p class="dim">{{ t.createCharDesc }}</p>
-          <p class="yellow">{{ t.createCharFee }}</p>
+          <p class="yellow">{{ t.createCharFee(freeFeeDisplay) }}</p>
         </div>
         <button class="mint-btn" @click="doCreate">{{ t.createCharBtn }}</button>
       </template>
@@ -40,7 +40,7 @@
         <div class="term-block">
           <p>{{ t.welcomeBack }}</p>
           <p class="dim">{{ t.companionDesc }}</p>
-          <p class="yellow">{{ t.paidFee }}</p>
+          <p class="yellow">{{ t.paidFee(paidFeeDisplay) }}</p>
         </div>
         <div class="btn-group">
           <button class="mint-btn" @click="doRecruit">{{ t.beginRecruitment }}</button>
@@ -123,6 +123,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { formatEther } from 'ethers'
 import { useWeb3 } from '../composables/useWeb3'
 import { useNFA } from '../composables/useNFA'
 import { useNFAStore } from '../stores/nfa'
@@ -134,8 +135,12 @@ const { t } = useI18n()
 const { isConnected, isCorrectChain, connect, switchToBscTestnet } = useWeb3()
 const {
   mintingState, mintError, lastMintedId, lastMintWasFree, ownedNFAs,
+  freeMintFee, paidMintFee,
   loadFreeMints, loadMyNFAs, doFreeMint, doPaidMint, resetMinting, hasCharacter,
 } = useNFA()
+
+const freeFeeDisplay = computed(() => formatEther(freeMintFee.value))
+const paidFeeDisplay = computed(() => formatEther(paidMintFee.value))
 const nfaStore = useNFAStore()
 
 const props = defineProps<{

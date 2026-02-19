@@ -131,7 +131,7 @@ import AdminPanel from './components/admin/AdminPanel.vue'
 const { isConnected, isCorrectChain, disconnect } = useWeb3()
 const { isOwner: isAdmin, checkOwner, resetAdmin } = useAdmin()
 const showAdmin = ref(false)
-const { ownedNFAs, loadMyNFAs, loadFreeMints, hasCharacter } = useNFA()
+const { ownedNFAs, loadMyNFAs, loadFreeMints, loadMintFees, hasCharacter } = useNFA()
 const nfaStore = useNFAStore()
 const gameStore = useGameStore()
 const { t } = useI18n()
@@ -156,6 +156,7 @@ watch([isConnected, isCorrectChain], async ([connected, correct]) => {
   if (connected && correct) {
     await loadMyNFAs()
     await loadFreeMints()
+    await loadMintFees()
     nfaStore.setOwnedNFAs(ownedNFAs.value)
     checkOwner()
   }

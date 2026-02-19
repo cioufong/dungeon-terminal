@@ -97,9 +97,14 @@ contract DungeonNFA is
     // CONSTANTS
     // =============================================
 
-    uint256 public constant FREE_MINT_FEE = 0.01 ether;
-    uint256 public constant MINT_FEE = 0.05 ether;
     uint256 public constant MAX_SUPPLY = 10000;
+
+    // =============================================
+    // MINT FEES (configurable by owner)
+    // =============================================
+
+    uint256 public freeMintFee;
+    uint256 public paidMintFee;
 
     // =============================================
     // STATE
@@ -219,6 +224,8 @@ contract DungeonNFA is
         __UUPSUpgradeable_init();
 
         treasuryAddress = treasury;
+        freeMintFee = 0.01 ether;
+        paidMintFee = 0.05 ether;
         freeMintsPerUser = 1;
 
         vrfCoordinator = VRFCoordinatorInterface(_vrfCoordinator);
@@ -242,7 +249,7 @@ contract DungeonNFA is
 
     function freeMint() external payable whenNotPaused nonReentrant {
         require(totalSupply() + pendingMintCount < MAX_SUPPLY, "Max supply reached");
-        require(msg.value == FREE_MINT_FEE, "Incorrect fee");
+        require(msg.value == freeMintFee, "Incorrect fee");
         require(!hasPendingMint[msg.sender], "Pending mint exists");
 
         uint256 totalFree = freeMintsPerUser + bonusFreeMints[msg.sender];
@@ -271,7 +278,7 @@ contract DungeonNFA is
 
     function paidMint() external payable whenNotPaused nonReentrant {
         require(totalSupply() + pendingMintCount < MAX_SUPPLY, "Max supply reached");
-        require(msg.value == MINT_FEE, "Incorrect fee");
+        require(msg.value == paidMintFee, "Incorrect fee");
         require(!hasPendingMint[msg.sender], "Pending mint exists");
 
         (bool ok, ) = payable(treasuryAddress).call{value: msg.value}("");
@@ -621,6 +628,14 @@ contract DungeonNFA is
         require(newTreasury != address(0), "Zero address");
         treasuryAddress = newTreasury;
         emit TreasuryUpdated(newTreasury);
+    }
+
+    function setFreeMintFee(uint256 fee) external onlyOwner {
+        freeMintFee = fee;
+    }
+
+    function setPaidMintFee(uint256 fee) external onlyOwner {
+        paidMintFee = fee;
     }
 
     function setFreeMintsPerUser(uint256 amount) external onlyOwner {

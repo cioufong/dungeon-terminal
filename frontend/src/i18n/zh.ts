@@ -14,7 +14,7 @@ export default {
   // Character creation (free mint with VRF)
   welcomeNew: '> 欢迎，冒险者。你的旅程从这里开始。',
   createCharDesc: '> 创建你的角色进入地牢。神谕将由命运锻造你的特质。',
-  createCharFee: '> 注册费用：0.01 BNB — 每个钱包一次，灵魂绑定。',
+  createCharFee: (fee: string) => `> 注册费用：${fee} BNB — 每个钱包一次，灵魂绑定。`,
   createCharBtn: '创建角色',
   requestingChar: '> 正在向神谕提交你的请求...',
   confirmTx: '> 请在钱包中确认交易。',
@@ -31,7 +31,7 @@ export default {
 
   // Companion recruitment (paid mint with VRF)
   welcomeBack: '> 准备为你的队伍招募伙伴。',
-  paidFee: '> 招募费用：0.05 BNB',
+  paidFee: (fee: string) => `> 招募费用：${fee} BNB`,
   companionDesc: '> 伙伴是可交易的 NFA 代理，与你并肩作战。',
   beginRecruitment: '开始招募',
   requestingRecruit: '> 正在向神谕发送招募请求...',

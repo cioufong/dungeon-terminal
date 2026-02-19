@@ -1,11 +1,11 @@
 import { ref } from 'vue'
-import { Contract, parseEther } from 'ethers'
+import { Contract } from 'ethers'
 import { useWeb3 } from './useWeb3'
 import ABI from '../abi/DungeonNFA.json'
 import { getContractAddress } from '../config'
 
-const FREE_MINT_FEE = parseEther('0.01')
-const PAID_MINT_FEE = parseEther('0.05')
+const freeMintFee = ref<bigint>(0n)
+const paidMintFee = ref<bigint>(0n)
 
 export type MintingState =
   | 'idle'
@@ -43,6 +43,14 @@ const lastMintWasFree = ref(false)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getContract(signerOrProvider: any): Contract {
   return new Contract(getContractAddress(), ABI, signerOrProvider)
+}
+
+async function loadMintFees() {
+  const { signer } = useWeb3()
+  if (!signer.value) return
+  const contract = getContract(signer.value)
+  freeMintFee.value = await contract.getFunction('freeMintFee')()
+  paidMintFee.value = await contract.getFunction('paidMintFee')()
 }
 
 async function loadFreeMints() {
@@ -130,7 +138,7 @@ async function doFreeMint() {
     const contract = getContract(signer.value)
     const beforeIds = new Set(ownedNFAs.value.map(n => n.tokenId))
 
-    const tx = await contract.getFunction('freeMint')({ value: FREE_MINT_FEE })
+    const tx = await contract.getFunction('freeMint')({ value: freeMintFee.value })
     await tx.wait()
 
     mintingState.value = 'awaitingVRF'
@@ -164,7 +172,7 @@ async function doPaidMint() {
     const contract = getContract(signer.value)
     const beforeIds = new Set(ownedNFAs.value.map(n => n.tokenId))
 
-    const tx = await contract.getFunction('paidMint')({ value: PAID_MINT_FEE })
+    const tx = await contract.getFunction('paidMint')({ value: paidMintFee.value })
     await tx.wait()
 
     mintingState.value = 'awaitingVRF'
@@ -198,10 +206,13 @@ export function useNFA() {
   return {
     ownedNFAs,
     freeMints,
+    freeMintFee,
+    paidMintFee,
     mintingState,
     mintError,
     lastMintedId,
     lastMintWasFree,
+    loadMintFees,
     loadFreeMints,
     loadMyNFAs,
     doFreeMint,
