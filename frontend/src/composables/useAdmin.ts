@@ -286,7 +286,7 @@ async function setVRFConfig(
 ) {
   const contract = getContract()
   return execTx(state, () =>
-    contract.getFunction('setVRFConfig')(coordinator, keyHash, subId, callbackGasLimit, requestConfirmations))
+    contract.getFunction('setVRFConfig')(coordinator, subId, keyHash, requestConfirmations, callbackGasLimit))
 }
 
 async function setGameServer(state: TxState, server: string, authorized: boolean) {

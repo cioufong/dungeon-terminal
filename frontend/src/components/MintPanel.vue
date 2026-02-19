@@ -139,8 +139,8 @@ const {
   loadFreeMints, loadMyNFAs, doFreeMint, doPaidMint, resetMinting, hasCharacter,
 } = useNFA()
 
-const freeFeeDisplay = computed(() => formatEther(freeMintFee.value))
-const paidFeeDisplay = computed(() => formatEther(paidMintFee.value))
+const freeFeeDisplay = computed(() => freeMintFee.value === 0n ? '0' : formatEther(freeMintFee.value))
+const paidFeeDisplay = computed(() => paidMintFee.value === 0n ? '0' : formatEther(paidMintFee.value))
 const nfaStore = useNFAStore()
 
 const props = defineProps<{

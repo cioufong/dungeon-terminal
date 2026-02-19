@@ -176,11 +176,13 @@ import { ref, reactive, onMounted } from 'vue'
 import { formatEther, parseEther } from 'ethers'
 import { useAdminStore } from '../../stores/admin'
 import { useAdmin, type TxState as TxStateType } from '../../composables/useAdmin'
+import { useNFA } from '../../composables/useNFA'
 import { useI18n } from '../../i18n'
 import TxStatus from './TxStatus.vue'
 
 const store = useAdminStore()
 const admin = useAdmin()
+const { loadMintFees } = useNFA()
 const { t } = useI18n()
 
 // TX states
@@ -244,12 +246,12 @@ function formatFee(fee: bigint | null): string {
 
 async function doSetFreeMintFee() {
   const ok = await admin.setFreeMintFee(freeMintFeeTx, parseEther(freeMintFeeInput.value))
-  if (ok) store.loadContractState()
+  if (ok) { store.loadContractState(); loadMintFees() }
 }
 
 async function doSetPaidMintFee() {
   const ok = await admin.setPaidMintFee(paidMintFeeTx, parseEther(paidMintFeeInput.value))
-  if (ok) store.loadContractState()
+  if (ok) { store.loadContractState(); loadMintFees() }
 }
 
 async function doSetFreeMints() {
